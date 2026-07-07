@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Phases 1–2 are implemented.** Phase 1 (Foundation): JSON-RPC 2.0 engine, message router, session manager (server + client, full initialize handshake, timeouts/progress/cancellation/ping), stdio transports (server-side and subprocess-spawning client-side). Phase 2 (Server SDK): content model, tool registry, resource provider (RFC 6570 level-1 templates, subscriptions), prompt provider, RFC 5424 logging, completions, JSON Schema subset validator, and the high-level `mcp::Server` facade (include/mcp/server/server.hpp) that auto-derives capabilities from populated registries. 90+ GTest suite including real-subprocess integration tests. Phases 3+ (client SDK, HTTP transport, embedded profile) are not started — see SRS §7 for sequencing.
+**Phases 1–3 are implemented.** Phase 1 (Foundation): JSON-RPC 2.0 engine, message router, session manager (server + client, full initialize handshake, timeouts/progress/cancellation/ping), stdio transports (server-side and subprocess-spawning client-side). Phase 2 (Server SDK): content model, tool registry, resource provider (RFC 6570 level-1 templates, subscriptions), prompt provider, RFC 5424 logging, completions, JSON Schema subset validator, and the high-level `mcp::Server` facade (include/mcp/server/server.hpp) that auto-derives capabilities from populated registries. Phase 3 (Client SDK): sampling types + multi-turn tool-use loop (`run_sampling_tool_loop`), roots provider, elicitation, and the `mcp::Client` facade (include/mcp/client/client.hpp) with typed synchronous wrappers for the whole server surface. 110+ GTest suite including real-subprocess integration tests in both directions. Phases 4+ (HTTP transport, embedded profile) are not started — see SRS §7 for sequencing.
+
+**Concurrency gotcha:** message dispatch is synchronous on the transport read thread. A server request handler must never block waiting on a client round-trip (deadlock) — do that work on a separate thread (see tests/tools/prober_stdio.cpp and the `Server::session()` doc comment).
 
 **`SRS.md` is the authoritative source of truth** for all requirements, architecture, and design decisions. Every requirement has an ID (e.g., `FR-CORE-001`) that should be traceable to implementation and tests.
 
@@ -42,7 +44,7 @@ ctest --test-dir build -R 'ServerSession.Handshake' # single test (regex on Suit
 
 Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON at top level), `MCP_USE_EXCEPTIONS` (ON; the OFF path is Phase 5), `MCP_WERROR` (OFF locally, ON in CI). Further options planned per FR-BUILD-002: `MCP_BUILD_SERVER`, `MCP_BUILD_CLIENT`, `MCP_USE_ASIO`, `MCP_USE_SIMDJSON`, `MCP_EMBEDDED_PROFILE`.
 
-Library targets: `mcp::core` (engine, sessions, content, schema), `mcp::transport` (stdio), `mcp::server` (tools/resources/prompts/logging/completions + `mcp::Server` facade). Example servers live in examples/ (echo, calculator).
+Library targets: `mcp::core` (engine, sessions, content, schema), `mcp::transport` (stdio), `mcp::server` (tools/resources/prompts/logging/completions + `mcp::Server` facade), `mcp::client` (sampling/roots/elicitation + `mcp::Client` facade; links mcp-server for the shared feature types). Example servers live in examples/ (echo, calculator).
 
 Dependencies: nlohmann/json 3.11+ (required, FetchContent fallback), GoogleTest (system or FetchContent), Threads. CI (`.github/workflows/ci.yml`) runs ubuntu {gcc, clang} × {Debug, Release} with `-DMCP_WERROR=ON`.
 
