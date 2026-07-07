@@ -18,12 +18,14 @@ target_link_libraries(mcp-core PUBLIC
 target_compile_features(mcp-core PUBLIC cxx_std_17)
 mcp_set_warnings(mcp-core)
 
-# mcp-transport: stdio transports (POSIX)
+# mcp-transport: stdio + Streamable HTTP transports (POSIX)
 add_library(mcp-transport STATIC
     transport/line_transport.cpp
     transport/line_io.cpp
     transport/stdio_transport.cpp
     transport/stdio_client_transport.cpp
+    transport/http/socket_util.cpp
+    transport/http/http_codec.cpp
 )
 add_library(mcp::transport ALIAS mcp-transport)
 target_link_libraries(mcp-transport PUBLIC mcp-core)
