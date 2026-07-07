@@ -137,6 +137,12 @@ struct ServerOptions {
     std::optional<std::string> instructions;
     /// Preferred version first (FR-CORE-006).
     std::vector<std::string> supported_versions{kProtocolVersion};
+    /// Accept a new `initialize` after the session is already initialized,
+    /// resetting the handshake. Off by default (the spec forbids
+    /// re-initialization within one session); enable for sessionless
+    /// Streamable HTTP servers where each reconnecting client is a new
+    /// logical session but shares this transport instance.
+    bool allow_reinitialize = false;
 };
 
 /// Server end of a session: answers initialize (FR-CORE-006..010), enforces

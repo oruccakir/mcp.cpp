@@ -329,8 +329,15 @@ ServerSession::ServerSession(std::shared_ptr<Transport> transport,
         methods::kInitialize,
         [this](const std::optional<json>& params) -> Result<json> {
             if (state() != SessionState::Uninitialized) {
-                return Error(ErrorCode::InvalidRequest,
-                             "initialize already received");
+                if (!options_.allow_reinitialize) {
+                    return Error(ErrorCode::InvalidRequest,
+                                 "initialize already received");
+                }
+                // Sessionless-HTTP mode: a fresh initialize starts a new
+                // logical session on this transport.
+                std::lock_guard<std::mutex> lock(peer_mutex_);
+                client_info_.reset();
+                client_capabilities_.reset();
             }
             if (!params) {
                 return Error(ErrorCode::InvalidParams,

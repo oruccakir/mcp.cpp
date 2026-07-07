@@ -26,6 +26,8 @@ int main(int argc, char** argv) {
     }
 
     mcp::Server server("echo-server-http", "1.0.0");
+    // Sessionless HTTP: every reconnecting client re-runs initialize.
+    server.set_allow_reinitialize(true);
     mcp::ToolSpec echo;
     echo.description = "Echoes back the input";
     echo.input_schema =

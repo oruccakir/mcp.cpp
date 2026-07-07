@@ -151,6 +151,24 @@ TEST(ServerSession, DoubleInitializeRejected) {
               static_cast<int>(ErrorCode::InvalidRequest));
 }
 
+TEST(ServerSession, ReinitializeAllowedWhenEnabled) {
+    // Sessionless Streamable HTTP mode: a reconnecting client re-runs the
+    // handshake on the same transport instance.
+    auto options = ServerFixture::default_options();
+    options.allow_reinitialize = true;
+    ServerFixture f(std::move(options));
+    f.handshake();
+
+    f.transport->deliver(make_initialize(99));
+    auto sent = f.transport->wait_for_sent(1);
+    ASSERT_TRUE(sent.has_value());
+    ASSERT_FALSE(as_response(*sent).is_error());
+    EXPECT_EQ(f.session.state(), SessionState::Initializing);
+
+    f.transport->deliver(make_initialized());
+    EXPECT_EQ(f.session.state(), SessionState::Operating);
+}
+
 TEST(ServerSession, ParseErrorAnsweredWithNullId) {
     ServerFixture f;
     f.transport->deliver_error(Error(ErrorCode::ParseError, "invalid JSON"));
