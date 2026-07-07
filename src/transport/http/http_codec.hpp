@@ -92,6 +92,11 @@ public:
     const HttpResponse& response() const { return response_; }
     HttpResponse take();
 
+    /// Bytes read past the headers that were not consumed as a framed body
+    /// (e.g. the start of an SSE stream on a Content-Length-less response).
+    /// Valid after Done; cleared by reset()/take().
+    std::string leftover_body() const;
+
     void reset();
 
 private:
@@ -147,6 +152,33 @@ private:
 
     void handle_line();
     std::vector<SseEvent> flush_event();
+};
+
+/// Incremental chunked transfer-encoding decoder for an open-ended stream
+/// (e.g. a chunked SSE response). Feed raw socket bytes; `take()` drains the
+/// decoded bytes. `ended()` is true once the terminating zero-length chunk is
+/// seen.
+class ChunkDecoder {
+public:
+    std::string feed(const char* data, std::size_t size);
+    std::string feed(std::string_view data) {
+        return feed(data.data(), data.size());
+    }
+    /// Drains and returns decoded bytes accumulated so far.
+    std::string take() {
+        std::string out;
+        out.swap(decoded_);
+        return out;
+    }
+    bool ended() const { return ended_; }
+    void reset();
+
+private:
+    std::string buf_;
+    std::string decoded_;
+    enum class Phase { Header, Data } phase_{Phase::Header};
+    std::size_t remaining_{0};  // bytes left in the current chunk
+    bool ended_{false};
 };
 
 }  // namespace mcp::detail::http

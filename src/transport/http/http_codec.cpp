@@ -419,6 +419,10 @@ HttpResponse HttpResponseParser::take() {
     return out;
 }
 
+std::string HttpResponseParser::leftover_body() const {
+    return buf_.substr(body_start_);
+}
+
 void HttpResponseParser::reset() {
     phase_ = Phase::StatusLine;
     buf_.clear();
@@ -559,6 +563,75 @@ std::vector<SseEvent> SseParser::feed(const char* data, std::size_t size) {
     }
     buf_.erase(0, start);
     return events;
+}
+
+// --- ChunkDecoder ---------------------------------------------------------
+
+std::string ChunkDecoder::feed(const char* data, std::size_t size) {
+    if (size > 0) {
+        buf_.append(data, size);
+    }
+    for (;;) {
+        if (ended_) {
+            break;
+        }
+        if (phase_ == Phase::Header) {
+            auto nl = buf_.find('\n');
+            if (nl == std::string::npos) {
+                break;
+            }
+            std::size_t line_end = nl;
+            if (line_end > 0 && buf_[line_end - 1] == '\r') {
+                --line_end;
+            }
+            std::string hline = buf_.substr(0, line_end);
+            buf_.erase(0, nl + 1);
+            if (auto semi = hline.find(';'); semi != std::string::npos) {
+                hline = hline.substr(0, semi);
+            }
+            hline = trim(hline);
+            std::size_t chunk_size = 0;
+            if (!parse_int(hline, chunk_size)) {
+                ended_ = true;  // malformed; stop
+                break;
+            }
+            if (chunk_size == 0) {
+                ended_ = true;
+                break;
+            }
+            remaining_ = chunk_size;
+            phase_ = Phase::Data;
+        } else {  // Phase::Data
+            if (buf_.empty()) {
+                break;
+            }
+            std::size_t take = std::min(remaining_, buf_.size());
+            decoded_.append(buf_, 0, take);
+            buf_.erase(0, take);
+            remaining_ -= take;
+            if (remaining_ == 0) {
+                // Skip the trailing CRLF after the chunk data.
+                if (buf_.size() >= 2 && buf_[0] == '\r' && buf_[1] == '\n') {
+                    buf_.erase(0, 2);
+                } else if (buf_.size() >= 1 && buf_[0] == '\n') {
+                    buf_.erase(0, 1);
+                } else if (!buf_.empty()) {
+                    // Partial CRLF: wait for more.
+                    break;
+                }
+                phase_ = Phase::Header;
+            }
+        }
+    }
+    return take();
+}
+
+void ChunkDecoder::reset() {
+    buf_.clear();
+    decoded_.clear();
+    phase_ = Phase::Header;
+    remaining_ = 0;
+    ended_ = false;
 }
 
 }  // namespace mcp::detail::http

@@ -23,6 +23,8 @@
 #include <mcp/server/resource_provider.hpp>
 #include <mcp/server/server.hpp>
 #include <mcp/server/tool_registry.hpp>
+#include <mcp/transport/http_client_transport.hpp>
+#include <mcp/transport/http_server_transport.hpp>
 #include <mcp/transport/stdio_client_transport.hpp>
 #include <mcp/transport/stdio_transport.hpp>
 #include <mcp/transport/transport.hpp>

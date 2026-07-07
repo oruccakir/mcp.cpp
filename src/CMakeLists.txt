@@ -26,6 +26,8 @@ add_library(mcp-transport STATIC
     transport/stdio_client_transport.cpp
     transport/http/socket_util.cpp
     transport/http/http_codec.cpp
+    transport/http_server_transport.cpp
+    transport/http_client_transport.cpp
 )
 add_library(mcp::transport ALIAS mcp-transport)
 target_link_libraries(mcp-transport PUBLIC mcp-core)

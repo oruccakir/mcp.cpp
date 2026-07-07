@@ -148,6 +148,43 @@ TEST(HttpCodec, ResponseErrorStatus) {
     EXPECT_TRUE(r.body.empty());
 }
 
+TEST(HttpCodec, ResponseLeftoverBodyIsSseStream) {
+    // A Content-Length-less SSE response: headers, then SSE bytes in the same
+    // read. The parser returns Done with empty body and the SSE bytes as
+    // leftover.
+    const std::string raw =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/event-stream\r\n"
+        "\r\n"
+        "data:hello\n\n";
+    HttpResponseParser p;
+    ASSERT_EQ(feed_all(p, raw), ParseStatus::Done);
+    EXPECT_EQ(p.response().status, 200);
+    EXPECT_TRUE(p.response().body.empty());
+    EXPECT_EQ(p.leftover_body(), "data:hello\n\n");
+}
+
+TEST(HttpCodec, ChunkDecoderDecodesAndEnds) {
+    using mcp::detail::http::ChunkDecoder;
+    ChunkDecoder d;
+    EXPECT_EQ(d.feed("5\r\nhello\r\n"), "hello");
+    EXPECT_FALSE(d.ended());
+    EXPECT_EQ(d.feed("6\r\nworld!\r\n"), "world!");
+    EXPECT_FALSE(d.ended());
+    EXPECT_EQ(d.feed("0\r\n\r\n"), "");
+    EXPECT_TRUE(d.ended());
+}
+
+TEST(HttpCodec, ChunkDecoderAcrossSplits) {
+    using mcp::detail::http::ChunkDecoder;
+    const std::string raw = "3\r\nabc\r\n0\r\n\r\n";
+    ChunkDecoder d;
+    std::string out;
+    for (char c : raw) out += d.feed(std::string_view(&c, 1));
+    EXPECT_EQ(out, "abc");
+    EXPECT_TRUE(d.ended());
+}
+
 TEST(HttpCodec, SerializeRequest) {
     HttpRequest req{"POST", "/mcp",
                     {{"host", "localhost:3001"}, {"content-length", "2"}},
