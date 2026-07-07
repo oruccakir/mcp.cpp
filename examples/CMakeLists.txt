@@ -1,4 +1,4 @@
-foreach(example echo_server calculator_server)
+foreach(example echo_server calculator_server echo_server_http)
     add_executable(${example} ${example}.cpp)
     target_link_libraries(${example} PRIVATE mcp::core mcp::transport mcp::server)
     mcp_set_warnings(${example})
