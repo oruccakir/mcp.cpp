@@ -3,6 +3,10 @@
 // Umbrella header for the MCP C++ SDK.
 
 #include <mcp/capabilities.hpp>
+#include <mcp/client/client.hpp>
+#include <mcp/client/elicitation.hpp>
+#include <mcp/client/roots_provider.hpp>
+#include <mcp/client/sampling.hpp>
 #include <mcp/content.hpp>
 #include <mcp/core/cancellation.hpp>
 #include <mcp/core/progress.hpp>

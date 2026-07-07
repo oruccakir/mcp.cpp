@@ -60,6 +60,13 @@ public:
     /// (FR-SRV-012).
     void notify_resource_updated(const std::string& uri);
 
+    /// The currently attached session (nullptr when not attached/serving).
+    /// Used to initiate server->client requests (sampling, roots,
+    /// elicitation). Do not block a request handler on a round-trip to the
+    /// client: dispatch is synchronous, so waiting inside a handler starves
+    /// the read loop — do such work on a separate thread.
+    ServerSession* session();
+
 private:
     void send_notification_if_operating(const std::string& method,
                                         std::optional<json> params);

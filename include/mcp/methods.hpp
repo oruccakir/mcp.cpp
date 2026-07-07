@@ -20,6 +20,10 @@ inline constexpr const char* kPromptsGet = "prompts/get";
 inline constexpr const char* kCompletionComplete = "completion/complete";
 inline constexpr const char* kLoggingSetLevel = "logging/setLevel";
 
+inline constexpr const char* kSamplingCreateMessage = "sampling/createMessage";
+inline constexpr const char* kRootsList = "roots/list";
+inline constexpr const char* kElicitationCreate = "elicitation/create";
+
 inline constexpr const char* kNotificationInitialized = "notifications/initialized";
 inline constexpr const char* kNotificationCancelled = "notifications/cancelled";
 inline constexpr const char* kNotificationProgress = "notifications/progress";

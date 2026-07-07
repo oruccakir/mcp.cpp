@@ -2,6 +2,16 @@
 
 namespace mcp {
 
+const char* role_to_string(Role role) {
+    return role == Role::Assistant ? "assistant" : "user";
+}
+
+std::optional<Role> role_from_string(const std::string& name) {
+    if (name == "user") return Role::User;
+    if (name == "assistant") return Role::Assistant;
+    return std::nullopt;
+}
+
 void to_json(json& j, const Annotations& a) {
     j = json::object();
     detail::set_optional(j, "audience", a.audience);
@@ -73,11 +83,16 @@ json content_to_json(const Content& content) {
             } else if constexpr (std::is_same_v<T, EmbeddedResource>) {
                 j = json{{"type", "resource"}, {"resource", c.resource}};
                 set_annotations(j, c.annotations);
-            } else {
+            } else if constexpr (std::is_same_v<T, ToolUseContent>) {
                 j = json{{"type", "tool_use"},
                          {"id", c.id},
                          {"name", c.name},
                          {"input", c.input}};
+            } else {
+                j = json{{"type", "tool_result"},
+                         {"toolUseId", c.tool_use_id},
+                         {"content", content_list_to_json(c.content)},
+                         {"isError", c.is_error}};
             }
             return j;
         },
@@ -114,6 +129,16 @@ Result<Content> content_from_json(const json& j) {
             return Content(ToolUseContent{j.at("id").get<std::string>(),
                                           j.at("name").get<std::string>(),
                                           j.value("input", json::object())});
+        }
+        if (type == "tool_result") {
+            auto nested =
+                content_list_from_json(j.value("content", json::array()));
+            if (!nested) {
+                return std::move(nested.error());
+            }
+            return Content(ToolResultContent{
+                j.at("toolUseId").get<std::string>(),
+                std::move(nested).value(), j.value("isError", false)});
         }
 #if defined(__cpp_exceptions)
     } catch (const json::exception& e) {
