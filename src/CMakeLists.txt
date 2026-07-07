@@ -41,3 +41,15 @@ add_library(mcp-server STATIC
 add_library(mcp::server ALIAS mcp-server)
 target_link_libraries(mcp-server PUBLIC mcp-core)
 mcp_set_warnings(mcp-server)
+
+# mcp-client: sampling, roots, elicitation, Client facade.
+# Links mcp-server for the shared feature types (Tool, Resource, Prompt)
+# used by the typed client wrappers.
+add_library(mcp-client STATIC
+    client/sampling.cpp
+    client/roots_provider.cpp
+    client/client.cpp
+)
+add_library(mcp::client ALIAS mcp-client)
+target_link_libraries(mcp-client PUBLIC mcp-core mcp-server)
+mcp_set_warnings(mcp-client)

@@ -278,6 +278,11 @@ int Server::run(std::shared_ptr<Transport> transport) {
     return 0;
 }
 
+ServerSession* Server::session() {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    return active_session_;
+}
+
 void Server::notify_resource_updated(const std::string& uri) {
     if (resources_.is_subscribed(uri)) {
         send_notification_if_operating(methods::kNotificationResourcesUpdated,
