@@ -7,8 +7,21 @@
 
 namespace mcp {
 
+namespace detail {
+/// Capability feature flags appear on the wire either as booleans
+/// ("listChanged": true) or as presence-objects ("tools": {}) depending on
+/// the client generation. Treat a present object as enabled.
+inline void get_capability_flag(const json& j, const char* key,
+                                std::optional<bool>& value) {
+    if (auto it = j.find(key); it != j.end() && !it->is_null()) {
+        value = it->is_boolean() ? it->get<bool>() : true;
+    }
+}
+}  // namespace detail
+
 // Wire format uses camelCase keys per the MCP spec; C++ members are
-// snake_case. All capability fields serialize with omit-if-absent semantics.
+// snake_case. All capability fields serialize with omit-if-absent semantics
+// (emitted as booleans; parsed leniently via get_capability_flag).
 
 struct LoggingCapability {};
 
@@ -83,7 +96,7 @@ inline void to_json(json& j, const PromptsCapability& c) {
     detail::set_optional(j, "listChanged", c.list_changed);
 }
 inline void from_json(const json& j, PromptsCapability& c) {
-    detail::get_optional(j, "listChanged", c.list_changed);
+    detail::get_capability_flag(j, "listChanged", c.list_changed);
 }
 
 inline void to_json(json& j, const ResourcesCapability& c) {
@@ -92,8 +105,8 @@ inline void to_json(json& j, const ResourcesCapability& c) {
     detail::set_optional(j, "listChanged", c.list_changed);
 }
 inline void from_json(const json& j, ResourcesCapability& c) {
-    detail::get_optional(j, "subscribe", c.subscribe);
-    detail::get_optional(j, "listChanged", c.list_changed);
+    detail::get_capability_flag(j, "subscribe", c.subscribe);
+    detail::get_capability_flag(j, "listChanged", c.list_changed);
 }
 
 inline void to_json(json& j, const ToolsCapability& c) {
@@ -101,7 +114,7 @@ inline void to_json(json& j, const ToolsCapability& c) {
     detail::set_optional(j, "listChanged", c.list_changed);
 }
 inline void from_json(const json& j, ToolsCapability& c) {
-    detail::get_optional(j, "listChanged", c.list_changed);
+    detail::get_capability_flag(j, "listChanged", c.list_changed);
 }
 
 inline void to_json(json& j, const ExperimentalCapability& c) { j = c.value; }
@@ -112,7 +125,7 @@ inline void to_json(json& j, const RootsCapability& c) {
     detail::set_optional(j, "listChanged", c.list_changed);
 }
 inline void from_json(const json& j, RootsCapability& c) {
-    detail::get_optional(j, "listChanged", c.list_changed);
+    detail::get_capability_flag(j, "listChanged", c.list_changed);
 }
 
 inline void to_json(json& j, const SamplingCapability& c) {
@@ -121,8 +134,8 @@ inline void to_json(json& j, const SamplingCapability& c) {
     detail::set_optional(j, "context", c.context);
 }
 inline void from_json(const json& j, SamplingCapability& c) {
-    detail::get_optional(j, "tools", c.tools);
-    detail::get_optional(j, "context", c.context);
+    detail::get_capability_flag(j, "tools", c.tools);
+    detail::get_capability_flag(j, "context", c.context);
 }
 
 inline void to_json(json& j, const ElicitationCapability& c) {
@@ -131,8 +144,8 @@ inline void to_json(json& j, const ElicitationCapability& c) {
     detail::set_optional(j, "url", c.url);
 }
 inline void from_json(const json& j, ElicitationCapability& c) {
-    detail::get_optional(j, "form", c.form);
-    detail::get_optional(j, "url", c.url);
+    detail::get_capability_flag(j, "form", c.form);
+    detail::get_capability_flag(j, "url", c.url);
 }
 
 inline void to_json(json& j, const ServerCapabilities& c) {
