@@ -4,8 +4,14 @@ target_link_libraries(echo_stdio PRIVATE mcp::core mcp::transport)
 mcp_set_warnings(echo_stdio)
 
 add_executable(toolbox_stdio tools/toolbox_stdio.cpp)
-target_link_libraries(toolbox_stdio PRIVATE mcp::core mcp::transport mcp::server)
+target_link_libraries(toolbox_stdio PRIVATE
+    mcp::core mcp::transport mcp::server mcp::client)
 mcp_set_warnings(toolbox_stdio)
+
+add_executable(prober_stdio tools/prober_stdio.cpp)
+target_link_libraries(prober_stdio PRIVATE
+    mcp::core mcp::transport mcp::server mcp::client)
+mcp_set_warnings(prober_stdio)
 
 add_executable(mcp_tests
     test_error.cpp
@@ -21,13 +27,18 @@ add_executable(mcp_tests
     test_prompts.cpp
     test_server.cpp
     test_server_integration.cpp
+    test_sampling.cpp
+    test_roots.cpp
+    test_client.cpp
+    test_client_integration.cpp
 )
 target_link_libraries(mcp_tests PRIVATE
-    mcp::core mcp::transport mcp::server GTest::gtest_main)
+    mcp::core mcp::transport mcp::server mcp::client GTest::gtest_main)
 target_compile_definitions(mcp_tests PRIVATE
     ECHO_STDIO_PATH="$<TARGET_FILE:echo_stdio>"
-    TOOLBOX_STDIO_PATH="$<TARGET_FILE:toolbox_stdio>")
-add_dependencies(mcp_tests echo_stdio toolbox_stdio)
+    TOOLBOX_STDIO_PATH="$<TARGET_FILE:toolbox_stdio>"
+    PROBER_STDIO_PATH="$<TARGET_FILE:prober_stdio>")
+add_dependencies(mcp_tests echo_stdio toolbox_stdio prober_stdio)
 mcp_set_warnings(mcp_tests)
 
 include(GoogleTest)
