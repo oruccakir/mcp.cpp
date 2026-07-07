@@ -38,7 +38,7 @@ json GetPromptResult::to_json() const {
     json msgs = json::array();
     for (const auto& m : messages) {
         msgs.push_back(json{
-            {"role", m.role == Role::User ? "user" : "assistant"},
+            {"role", role_to_string(m.role)},
             {"content", content_to_json(m.content)},
         });
     }

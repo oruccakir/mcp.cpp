@@ -65,9 +65,25 @@ struct ToolUseContent {
     json input = json::object();
 };
 
+struct ToolResultContent;  // defined below (recursive: carries Content)
+
 using Content =
     std::variant<TextContent, ImageContent, AudioContent, EmbeddedResource,
-                 ToolUseContent>;
+                 ToolUseContent, ToolResultContent>;
+
+/// Result of a tool invocation fed back into the sampling loop (FR-CLI-002).
+struct ToolResultContent {
+    std::string tool_use_id;
+    std::vector<Content> content;
+    bool is_error = false;
+};
+
+/// Message author role, shared by prompts (FR-SRV-016) and sampling
+/// (FR-CLI-001).
+enum class Role { User, Assistant };
+
+const char* role_to_string(Role role);
+std::optional<Role> role_from_string(const std::string& name);
 
 /// Serializes with the wire "type" discriminator
 /// (text/image/audio/resource/tool_use).

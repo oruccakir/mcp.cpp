@@ -38,8 +38,6 @@ struct Prompt {
 void to_json(json& j, const Prompt& p);
 void from_json(const json& j, Prompt& p);
 
-enum class Role { User, Assistant };
-
 /// Prompt message; content types per FR-SRV-016.
 struct PromptMessage {
     Role role = Role::User;
