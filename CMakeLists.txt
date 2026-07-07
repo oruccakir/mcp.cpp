@@ -16,6 +16,7 @@ else()
 endif()
 
 option(MCP_BUILD_TESTS "Build the mcp.cpp test suite" ${MCP_IS_TOP_LEVEL})
+option(MCP_BUILD_EXAMPLES "Build the mcp.cpp example servers" ${MCP_IS_TOP_LEVEL})
 option(MCP_USE_EXCEPTIONS "Enable exception-based error reporting" ON)
 option(MCP_WERROR "Treat compiler warnings as errors" OFF)
 
@@ -28,4 +29,8 @@ add_subdirectory(src)
 if(MCP_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+if(MCP_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()

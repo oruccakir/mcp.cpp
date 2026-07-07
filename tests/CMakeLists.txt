@@ -1,7 +1,11 @@
-# Helper binary spawned by the integration tests.
+# Helper binaries spawned by the integration tests.
 add_executable(echo_stdio tools/echo_stdio.cpp)
 target_link_libraries(echo_stdio PRIVATE mcp::core mcp::transport)
 mcp_set_warnings(echo_stdio)
+
+add_executable(toolbox_stdio tools/toolbox_stdio.cpp)
+target_link_libraries(toolbox_stdio PRIVATE mcp::core mcp::transport mcp::server)
+mcp_set_warnings(toolbox_stdio)
 
 add_executable(mcp_tests
     test_error.cpp
@@ -10,11 +14,20 @@ add_executable(mcp_tests
     test_session.cpp
     test_stdio.cpp
     test_integration.cpp
+    test_content.cpp
+    test_schema.cpp
+    test_tools.cpp
+    test_resources.cpp
+    test_prompts.cpp
+    test_server.cpp
+    test_server_integration.cpp
 )
-target_link_libraries(mcp_tests PRIVATE mcp::core mcp::transport GTest::gtest_main)
+target_link_libraries(mcp_tests PRIVATE
+    mcp::core mcp::transport mcp::server GTest::gtest_main)
 target_compile_definitions(mcp_tests PRIVATE
-    ECHO_STDIO_PATH="$<TARGET_FILE:echo_stdio>")
-add_dependencies(mcp_tests echo_stdio)
+    ECHO_STDIO_PATH="$<TARGET_FILE:echo_stdio>"
+    TOOLBOX_STDIO_PATH="$<TARGET_FILE:toolbox_stdio>")
+add_dependencies(mcp_tests echo_stdio toolbox_stdio)
 mcp_set_warnings(mcp_tests)
 
 include(GoogleTest)
