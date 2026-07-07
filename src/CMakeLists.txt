@@ -3,6 +3,8 @@ add_library(mcp-core STATIC
     jsonrpc/message.cpp
     core/router.cpp
     core/session.cpp
+    core/content.cpp
+    core/schema.cpp
 )
 add_library(mcp::core ALIAS mcp-core)
 target_include_directories(mcp-core PUBLIC
@@ -26,3 +28,16 @@ add_library(mcp-transport STATIC
 add_library(mcp::transport ALIAS mcp-transport)
 target_link_libraries(mcp-transport PUBLIC mcp-core)
 mcp_set_warnings(mcp-transport)
+
+# mcp-server: tools, resources, prompts, logging, completions, Server facade
+add_library(mcp-server STATIC
+    server/tool_registry.cpp
+    server/resource_provider.cpp
+    server/prompt_provider.cpp
+    server/logging.cpp
+    server/uri_template.cpp
+    server/server.cpp
+)
+add_library(mcp::server ALIAS mcp-server)
+target_link_libraries(mcp-server PUBLIC mcp-core)
+mcp_set_warnings(mcp-server)
