@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Phases 1–3 are implemented.** Phase 1 (Foundation): JSON-RPC 2.0 engine, message router, session manager (server + client, full initialize handshake, timeouts/progress/cancellation/ping), stdio transports (server-side and subprocess-spawning client-side). Phase 2 (Server SDK): content model, tool registry, resource provider (RFC 6570 level-1 templates, subscriptions), prompt provider, RFC 5424 logging, completions, JSON Schema subset validator, and the high-level `mcp::Server` facade (include/mcp/server/server.hpp) that auto-derives capabilities from populated registries. Phase 3 (Client SDK): sampling types + multi-turn tool-use loop (`run_sampling_tool_loop`), roots provider, elicitation, and the `mcp::Client` facade (include/mcp/client/client.hpp) with typed synchronous wrappers for the whole server surface. 110+ GTest suite including real-subprocess integration tests in both directions. Phases 4+ (HTTP transport, embedded profile) are not started — see SRS §7 for sequencing.
+**Phases 1–4 are implemented.** Phase 1 (Foundation): JSON-RPC 2.0 engine, message router, session manager (server + client, full initialize handshake, timeouts/progress/cancellation/ping), stdio transports (server-side and subprocess-spawning client-side). Phase 2 (Server SDK): content model, tool registry, resource provider (RFC 6570 level-1 templates, subscriptions), prompt provider, RFC 5424 logging, completions, JSON Schema subset validator, and the high-level `mcp::Server` facade (include/mcp/server/server.hpp) that auto-derives capabilities from populated registries. Phase 3 (Client SDK): sampling types + multi-turn tool-use loop (`run_sampling_tool_loop`), roots provider, elicitation, and the `mcp::Client` facade (include/mcp/client/client.hpp) with typed synchronous wrappers for the whole server surface. Phase 4 (Streamable HTTP transport, FR-TRAN-005..009): a hand-rolled HTTP/1.1 + SSE codec and POSIX socket helpers (no new dependencies, like stdio), `HttpServerTransport` (single endpoint: POST = JSON-RPC request/response, GET = SSE stream for server-initiated messages, SSE resumability via event IDs backed by a ring buffer, Origin validation → 403, pluggable authorize hook → 401, bind 127.0.0.1 by default, MCP-Protocol-Version header, 404 on wrong path, 400/-32700 on malformed JSON, 406 on GET without `Accept: text/event-stream`), `HttpClientTransport` (POST for requests, auto SSE GET with Last-Event-ID resume + reconnect), and `examples/echo_server_http`. 130+ GTest suite including real-subprocess integration tests in both stdio and HTTP directions. Phase 5+ (embedded profile, packaging, coroutine API) is not started — see SRS §7 for sequencing.
+
+**HTTP transport security note (FR-TRAN-008):** TLS is intentionally out of scope — deploy behind a reverse proxy that terminates TLS. The server binds 127.0.0.1 by default. Only `localhost` origins are accepted unless `HttpServerOptions::allowed_origins` is populated; use the `authorize` hook for bearer-token / custom auth (return false → 401).
 
 **Concurrency gotcha:** message dispatch is synchronous on the transport read thread. A server request handler must never block waiting on a client round-trip (deadlock) — do that work on a separate thread (see tests/tools/prober_stdio.cpp and the `Server::session()` doc comment).
 
@@ -44,11 +46,11 @@ ctest --test-dir build -R 'ServerSession.Handshake' # single test (regex on Suit
 
 Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON at top level), `MCP_USE_EXCEPTIONS` (ON; the OFF path is Phase 5), `MCP_WERROR` (OFF locally, ON in CI). Further options planned per FR-BUILD-002: `MCP_BUILD_SERVER`, `MCP_BUILD_CLIENT`, `MCP_USE_ASIO`, `MCP_USE_SIMDJSON`, `MCP_EMBEDDED_PROFILE`.
 
-Library targets: `mcp::core` (engine, sessions, content, schema), `mcp::transport` (stdio), `mcp::server` (tools/resources/prompts/logging/completions + `mcp::Server` facade), `mcp::client` (sampling/roots/elicitation + `mcp::Client` facade; links mcp-server for the shared feature types). Example servers live in examples/ (echo, calculator).
+Library targets: `mcp::core` (engine, sessions, content, schema), `mcp::transport` (stdio + Streamable HTTP), `mcp::server` (tools/resources/prompts/logging/completions + `mcp::Server` facade), `mcp::client` (sampling/roots/elicitation + `mcp::Client` facade; links mcp-server for the shared feature types). Example servers live in examples/ (echo, calculator, echo_server_http).
 
 Dependencies: nlohmann/json 3.11+ (required, FetchContent fallback), GoogleTest (system or FetchContent), Threads. CI (`.github/workflows/ci.yml`) runs ubuntu {gcc, clang} × {Debug, Release} with `-DMCP_WERROR=ON`.
 
-Manual smoke test of the protocol: pipe newline-delimited JSON-RPC into `./build/tests/echo_stdio` (see tests/tools/echo_stdio.cpp).
+Manual smoke test of the protocol: pipe newline-delimited JSON-RPC into `./build/tests/echo_stdio` (see tests/tools/echo_stdio.cpp), or run `./build/examples/echo_server_http --port 3001` and POST JSON-RPC to `http://127.0.0.1:3001/mcp` (GET that URL with `Accept: text/event-stream` for the SSE stream).
 
 ## Code Conventions (established in Phase 1)
 
@@ -57,7 +59,7 @@ Manual smoke test of the protocol: pipe newline-delimited JSON-RPC into `./build
 - Handlers return `mcp::Result<json>` (include/mcp/result.hpp); returning an `Error` becomes a JSON-RPC error response. Keep new APIs `Result`-friendly so the future no-exception profile doesn't break them.
 - Exception-dependent code is guarded with `#if defined(__cpp_exceptions)`.
 - Requirement-relevant code and tests cite their SRS ID (e.g. `// FR-CORE-015`) — keep doing this.
-- Tests use `mcp_test::MockTransport` (tests/mock_transport.hpp) for session-level tests; real pipes/subprocesses only in test_stdio.cpp and test_integration.cpp.
+- Tests use `mcp_test::MockTransport` (tests/mock_transport.hpp) for session-level tests; real pipes/subprocesses only in test_stdio.cpp, test_integration.cpp, test_http_transport.cpp (in-process real sockets), and test_http_integration.cpp (spawned echo_server_http).
 
 ## Testing Expectations (SRS §5.11)
 
