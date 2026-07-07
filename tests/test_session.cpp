@@ -76,6 +76,34 @@ TEST(ServerSession, HandshakeSequence) {
     EXPECT_EQ(f.session.client_info()->name, "test-client");
 }
 
+TEST(ServerSession, AcceptsObjectStyleCapabilityFlags) {
+    // Some clients (e.g. MCP Inspector / newer TS SDK) send capability
+    // feature flags as presence-objects rather than booleans.
+    ServerFixture f;
+    const auto params = json::parse(R"({
+        "protocolVersion": "2025-11-25",
+        "capabilities": {
+            "sampling": {"tools": {}},
+            "elicitation": {"form": {}, "url": true},
+            "roots": {"listChanged": true}
+        },
+        "clientInfo": {"name": "inspector", "version": "0.22.0"}
+    })");
+    f.transport->deliver(Message(
+        JsonRpcRequest{RequestId(std::int64_t{1}), methods::kInitialize, params}));
+    auto sent = f.transport->wait_for_sent(0);
+    ASSERT_TRUE(sent.has_value());
+    ASSERT_FALSE(as_response(*sent).is_error())
+        << as_response(*sent).error->message;
+
+    const auto caps = f.session.client_capabilities();
+    ASSERT_TRUE(caps.has_value());
+    EXPECT_EQ(caps->sampling->tools, true);       // object -> enabled
+    EXPECT_EQ(caps->elicitation->form, true);     // object -> enabled
+    EXPECT_EQ(caps->elicitation->url, true);      // bool passes through
+    EXPECT_EQ(caps->roots->list_changed, true);
+}
+
 TEST(ServerSession, VersionMismatchOffersServerVersion) {
     // FR-CORE-006: unsupported requested version -> server offers its own.
     ServerFixture f;
@@ -149,6 +177,24 @@ TEST(ServerSession, DoubleInitializeRejected) {
     ASSERT_TRUE(as_response(*sent).is_error());
     EXPECT_EQ(as_response(*sent).error->code,
               static_cast<int>(ErrorCode::InvalidRequest));
+}
+
+TEST(ServerSession, ReinitializeAllowedWhenEnabled) {
+    // Sessionless Streamable HTTP mode: a reconnecting client re-runs the
+    // handshake on the same transport instance.
+    auto options = ServerFixture::default_options();
+    options.allow_reinitialize = true;
+    ServerFixture f(std::move(options));
+    f.handshake();
+
+    f.transport->deliver(make_initialize(99));
+    auto sent = f.transport->wait_for_sent(1);
+    ASSERT_TRUE(sent.has_value());
+    ASSERT_FALSE(as_response(*sent).is_error());
+    EXPECT_EQ(f.session.state(), SessionState::Initializing);
+
+    f.transport->deliver(make_initialized());
+    EXPECT_EQ(f.session.state(), SessionState::Operating);
 }
 
 TEST(ServerSession, ParseErrorAnsweredWithNullId) {

@@ -39,6 +39,8 @@ public:
 
     Result<void> register_tool(const std::string& name, ToolSpec spec);
     void set_instructions(std::string instructions);
+    /// See ServerOptions::allow_reinitialize (for sessionless HTTP serving).
+    void set_allow_reinitialize(bool allow) { allow_reinitialize_ = allow; }
 
     /// Capabilities implied by the populated registries (FR-CORE-008):
     /// tools/resources/prompts iff non-empty (listChanged, subscribe),
@@ -73,6 +75,7 @@ private:
 
     Implementation info_;
     std::optional<std::string> instructions_;
+    bool allow_reinitialize_ = false;
     ToolRegistry tools_;
     ResourceProvider resources_;
     PromptProvider prompts_;

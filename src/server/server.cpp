@@ -92,6 +92,7 @@ ServerOptions Server::server_options() const {
     options.server_info = info_;
     options.capabilities = capabilities();
     options.instructions = instructions_;
+    options.allow_reinitialize = allow_reinitialize_;
     return options;
 }
 
