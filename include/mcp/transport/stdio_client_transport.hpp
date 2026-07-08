@@ -46,16 +46,14 @@ protected:
     void write_line(const std::string& line) override;
 
 private:
-    void spawn();
     void stdout_loop();
     void stderr_loop();
-    bool wait_for_exit(std::chrono::milliseconds timeout);
 
     StdioServerParameters parameters_;
     std::chrono::milliseconds grace_{2000};
 
     std::atomic<bool> running_{false};
-    std::atomic<int> child_pid_{-1};
+    std::atomic<std::int64_t> child_pid_{-1};
     std::atomic<int> exit_status_{-1};
     std::atomic<bool> exited_{false};
 

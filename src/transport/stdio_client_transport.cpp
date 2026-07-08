@@ -1,28 +1,9 @@
 #include <mcp/transport/stdio_client_transport.hpp>
 
-#include <cerrno>
-#include <csignal>
-#include <cstdlib>
-
-#include <sys/wait.h>
-#include <unistd.h>
-
+#include "../platform/pal.hpp"
 #include "line_io.hpp"
 
-extern char** environ;
-
 namespace mcp {
-
-namespace {
-
-void close_fd(int& fd) {
-    if (fd >= 0) {
-        ::close(fd);
-        fd = -1;
-    }
-}
-
-}  // namespace
 
 StdioClientTransport::StdioClientTransport(StdioServerParameters parameters)
     : parameters_(std::move(parameters)) {}
@@ -46,92 +27,29 @@ void StdioClientTransport::connect() {
     if (running_.exchange(true)) {
         return;
     }
-    // Writing to a dead child must surface as a write error, not SIGPIPE.
-    ::signal(SIGPIPE, SIG_IGN);
-    spawn();
-    if (child_pid_.load() < 0) {
+    // Writing to a dead child must surface as a write error, not a signal.
+    pal::ignore_broken_pipe_signals();
+
+    pal::ProcessSpec spec;
+    spec.command = parameters_.command;
+    spec.args = parameters_.args;
+    spec.env = parameters_.env;
+    spec.cwd = parameters_.cwd;
+
+    pal::Process process;
+    std::string error;
+    if (!pal::spawn(spec, process, error)) {
         running_.store(false);
+        emit_error(Error(ErrorCode::InternalError, "spawn failed: " + error));
         return;
     }
+    child_pid_.store(process.pid);
+    stdin_fd_ = process.stdin_fd;
+    stdout_fd_ = process.stdout_fd;
+    stderr_fd_ = process.stderr_fd;
+
     stdout_thread_ = std::thread([this] { stdout_loop(); });
     stderr_thread_ = std::thread([this] { stderr_loop(); });
-}
-
-void StdioClientTransport::spawn() {
-    int in_pipe[2];   // parent -> child stdin
-    int out_pipe[2];  // child stdout -> parent
-    int err_pipe[2];  // child stderr -> parent
-    if (::pipe(in_pipe) != 0 || ::pipe(out_pipe) != 0 || ::pipe(err_pipe) != 0) {
-        emit_error(Error(ErrorCode::InternalError, "failed to create pipes"));
-        return;
-    }
-
-    // Build argv/envp before forking (only async-signal-safe calls after).
-    std::vector<std::string> argv_storage;
-    argv_storage.push_back(parameters_.command);
-    for (const auto& arg : parameters_.args) {
-        argv_storage.push_back(arg);
-    }
-    std::vector<char*> argv;
-    argv.reserve(argv_storage.size() + 1);
-    for (auto& s : argv_storage) {
-        argv.push_back(s.data());
-    }
-    argv.push_back(nullptr);
-
-    std::vector<std::string> env_storage;
-    for (char** e = environ; *e != nullptr; ++e) {
-        const std::string entry(*e);
-        const auto key = entry.substr(0, entry.find('='));
-        if (parameters_.env.find(key) == parameters_.env.end()) {
-            env_storage.push_back(entry);
-        }
-    }
-    for (const auto& [key, value] : parameters_.env) {
-        env_storage.push_back(key + "=" + value);
-    }
-    std::vector<char*> envp;
-    envp.reserve(env_storage.size() + 1);
-    for (auto& s : env_storage) {
-        envp.push_back(s.data());
-    }
-    envp.push_back(nullptr);
-
-    const pid_t pid = ::fork();
-    if (pid < 0) {
-        emit_error(Error(ErrorCode::InternalError, "fork failed"));
-        for (int fd : {in_pipe[0], in_pipe[1], out_pipe[0], out_pipe[1],
-                       err_pipe[0], err_pipe[1]}) {
-            ::close(fd);
-        }
-        return;
-    }
-
-    if (pid == 0) {
-        // Child.
-        ::dup2(in_pipe[0], STDIN_FILENO);
-        ::dup2(out_pipe[1], STDOUT_FILENO);
-        ::dup2(err_pipe[1], STDERR_FILENO);
-        for (int fd : {in_pipe[0], in_pipe[1], out_pipe[0], out_pipe[1],
-                       err_pipe[0], err_pipe[1]}) {
-            ::close(fd);
-        }
-        if (parameters_.cwd && ::chdir(parameters_.cwd->c_str()) != 0) {
-            ::_exit(126);
-        }
-        environ = envp.data();
-        ::execvp(argv[0], argv.data());
-        ::_exit(127);
-    }
-
-    // Parent.
-    ::close(in_pipe[0]);
-    ::close(out_pipe[1]);
-    ::close(err_pipe[1]);
-    stdin_fd_ = in_pipe[1];
-    stdout_fd_ = out_pipe[0];
-    stderr_fd_ = err_pipe[0];
-    child_pid_.store(pid);
 }
 
 void StdioClientTransport::write_line(const std::string& line) {
@@ -141,7 +59,7 @@ void StdioClientTransport::write_line(const std::string& line) {
     }
     std::string framed = line;
     framed.push_back('\n');
-    if (!detail::write_all(stdin_fd_, framed.data(), framed.size())) {
+    if (!pal::write_all(stdin_fd_, framed.data(), framed.size())) {
         emit_error(Error(ErrorCode::InternalError,
                          "write to server process failed"));
     }
@@ -182,40 +100,34 @@ void StdioClientTransport::stderr_loop() {
     }
 }
 
-bool StdioClientTransport::wait_for_exit(std::chrono::milliseconds timeout) {
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    const pid_t pid = child_pid_.load();
-    while (std::chrono::steady_clock::now() < deadline) {
-        int status = 0;
-        const pid_t r = ::waitpid(pid, &status, WNOHANG);
-        if (r == pid) {
-            exit_status_.store(status);
-            exited_.store(true);
-            return true;
-        }
-        if (r < 0) {
-            return true;  // No such child (already reaped).
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    return false;
-}
-
 void StdioClientTransport::disconnect() {
     if (!running_.exchange(false)) {
         return;
     }
-    const pid_t pid = child_pid_.load();
 
-    // FR-TRAN-004: close stdin → wait → SIGTERM → wait → SIGKILL.
-    close_fd(stdin_fd_);
-    if (pid > 0 && !exited_.load()) {
-        if (!wait_for_exit(grace_)) {
-            ::kill(pid, SIGTERM);
-            if (!wait_for_exit(grace_)) {
-                ::kill(pid, SIGKILL);
-                wait_for_exit(grace_);
-            }
+    pal::Process process;
+    process.pid = child_pid_.load();
+    process.stdin_fd = stdin_fd_;
+    process.stdout_fd = stdout_fd_;
+    process.stderr_fd = stderr_fd_;
+
+    // FR-TRAN-004: close stdin -> wait -> SIGTERM -> wait -> SIGKILL.
+    pal::close_fd(stdin_fd_);
+    const int grace = static_cast<int>(grace_.count());
+    if (process.pid > 0 && !exited_.load()) {
+        int status = -1;
+        bool exited = pal::wait_exit(process, grace, status);
+        if (!exited) {
+            pal::terminate(process, /*force=*/false);
+            exited = pal::wait_exit(process, grace, status);
+        }
+        if (!exited) {
+            pal::terminate(process, /*force=*/true);
+            exited = pal::wait_exit(process, grace, status);
+        }
+        if (exited) {
+            exit_status_.store(status);
+            exited_.store(true);
         }
     }
 
@@ -226,8 +138,8 @@ void StdioClientTransport::disconnect() {
     if (stderr_thread_.joinable() && stderr_thread_.get_id() != self) {
         stderr_thread_.join();
     }
-    close_fd(stdout_fd_);
-    close_fd(stderr_fd_);
+    pal::close_fd(stdout_fd_);
+    pal::close_fd(stderr_fd_);
 }
 
 }  // namespace mcp
