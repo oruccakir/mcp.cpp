@@ -31,6 +31,7 @@ add_executable(mcp_tests
     test_roots.cpp
     test_client.cpp
     test_client_integration.cpp
+    test_log.cpp
     test_http_codec.cpp
     test_http_transport.cpp
     test_http_session.cpp

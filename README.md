@@ -147,6 +147,22 @@ server.resources().set_read_handler(
 server.logger().info({{"event", "started"}});   // notifications/message
 ```
 
+## Diagnostic logging
+
+Build with `-DMCP_ENABLE_LOGGING=ON` to compile in the `MCP_LOG` diagnostics (default OFF: zero overhead, statements compile away). Logs go to **stderr** — on the stdio transport stdout is the protocol wire. Runtime verbosity via the `MCP_LOG` env var (`trace|debug|info|warn|error|off`, default `info`):
+
+```
+$ MCP_LOG=debug ./echo_server_http --port 3001
+[20:19:42.738] [info ] [registry] tool registered: "echo" (1 total)
+[20:19:42.739] [info ] [http] listening on 127.0.0.1:3001 (path /mcp)
+[20:19:43.147] [info ] [http] session created: 4b9043c4... (1 active)
+[20:19:43.147] [info ] [session] initialize: client "log-demo" v1.0 -> protocol 2025-11-25
+[20:19:43.157] [debug] [session] --> tools/call (id 2)
+[20:19:43.162] [warn ] [http] HTTP 403 Forbidden: origin not allowed
+```
+
+Not to be confused with `server.logger()`, which is the MCP *protocol* logging feature (`notifications/message` sent to the connected client). Embedders can redirect the diagnostics with `mcp::set_log_sink`.
+
 ## Trying it with MCP Inspector
 
 ```bash
