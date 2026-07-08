@@ -205,7 +205,7 @@ SRS.md                the authoritative requirements spec (FR-* ids traceable to
 
 ## Security notes (Streamable HTTP)
 
-TLS is intentionally out of scope — deploy behind a reverse proxy that terminates TLS. The server binds `127.0.0.1` by default; only localhost origins are accepted unless `allowed_origins` is set, and the `authorize` hook supports bearer-token/custom auth. See FR-TRAN-008 in `SRS.md`.
+TLS is intentionally out of scope — deploy behind a reverse proxy that terminates TLS. The server binds `127.0.0.1` by default, so it is *not* reachable from your LAN/public IP unless you opt in with `HttpServerOptions::host = "0.0.0.0"` (the example: `./echo_server_http --host 0.0.0.0`). Before exposing it, set `allowed_origins` (non-localhost browser origins are rejected with 403 against DNS-rebinding) and wire the `authorize` hook for bearer-token/custom auth. See FR-TRAN-008 in `SRS.md`.
 
 ## Status & roadmap
 
