@@ -8,8 +8,7 @@ class McpCppConan(ConanFile):
     description = ("C++ SDK for the Model Context Protocol (MCP): servers "
                    "and clients over stdio and Streamable HTTP.")
     url = "https://github.com/oruccakir/mcp.cpp"
-    # TODO: add a top-level LICENSE file to the repo, then set it here.
-    license = "LicenseRef-pending"
+    license = "MIT"
     settings = "os", "compiler", "build_type", "arch"
     exports_sources = ("CMakeLists.txt", "CMakePresets.json", "cmake/*",
                        "include/*", "src/*", "third_party/*")

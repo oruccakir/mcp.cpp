@@ -24,7 +24,4 @@ vcpkg_cmake_config_fixup(PACKAGE_NAME mcp CONFIG_PATH lib/cmake/mcp)
 
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 
-# NOTE: the repository has no top-level LICENSE file yet; add one before
-# registry submission and switch this to vcpkg_install_copyright.
-file(WRITE "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright"
-     "See https://github.com/oruccakir/mcp.cpp (license pending). Bundled nlohmann/json is MIT.")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
