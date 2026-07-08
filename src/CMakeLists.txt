@@ -21,15 +21,20 @@ mcp_set_warnings(mcp-core)
 # Platform Abstraction Layer backend selection (SRS §3.1, FR-EMB-002).
 # Transports only ever call the pal:: API from src/platform/pal.hpp; adding
 # an OS means adding a backend directory here, not touching transport code.
-if(UNIX)
+if(WIN32)
+    set(MCP_PAL_SOURCES
+        platform/win32/io.cpp
+        platform/win32/net.cpp
+        platform/win32/process.cpp
+    )
+elseif(UNIX)
     set(MCP_PAL_SOURCES
         platform/posix/io.cpp
         platform/posix/net.cpp
         platform/posix/process.cpp
     )
 else()
-    message(FATAL_ERROR
-        "No PAL backend for this platform yet (POSIX only; win32 planned)")
+    message(FATAL_ERROR "No PAL backend for this platform")
 endif()
 
 # mcp-transport: stdio + Streamable HTTP transports over the PAL
@@ -49,6 +54,9 @@ add_library(mcp-transport STATIC
 add_library(mcp::transport ALIAS mcp-transport)
 target_include_directories(mcp-transport PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mcp-transport PUBLIC mcp-core)
+if(WIN32)
+    target_link_libraries(mcp-transport PUBLIC ws2_32)
+endif()
 mcp_set_warnings(mcp-transport)
 
 # mcp-server: tools, resources, prompts, logging, completions, Server facade
