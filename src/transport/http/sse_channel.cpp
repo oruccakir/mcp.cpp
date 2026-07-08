@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <vector>
 
-#include "../line_io.hpp"
+#include "../../platform/pal.hpp"
 #include "http_codec.hpp"
 
 namespace mcp::detail {
@@ -55,7 +55,7 @@ void SseChannel::attach_stream(int fd, const std::string& last_event_id,
          {"Connection", "keep-alive"},
          {"MCP-Protocol-Version", protocol_version_header}},
         "", /*streaming=*/true);
-    if (!write_all(fd, header.data(), header.size())) {
+    if (!pal::write_all(fd, header.data(), header.size())) {
         return;
     }
 
@@ -64,7 +64,7 @@ void SseChannel::attach_stream(int fd, const std::string& last_event_id,
     initial.id = std::to_string(last_assigned);
     initial.retry_ms = retry_ms_;
     const auto initial_text = format_sse_event(initial);
-    if (!write_all(fd, initial_text.data(), initial_text.size())) {
+    if (!pal::write_all(fd, initial_text.data(), initial_text.size())) {
         return;
     }
 
@@ -96,7 +96,7 @@ void SseChannel::attach_stream(int fd, const std::string& last_event_id,
             event.id = std::to_string(item.id);
             event.data = item.data;
             const auto text = format_sse_event(event);
-            if (!write_all(fd, text.data(), text.size())) {
+            if (!pal::write_all(fd, text.data(), text.size())) {
                 return;  // client gone; may reconnect with Last-Event-ID
             }
         }

@@ -1,4 +1,6 @@
-#include "socket_util.hpp"
+// POSIX backend: TCP sockets for the Streamable HTTP transport.
+
+#include "../pal.hpp"
 
 #include <cerrno>
 #include <cstring>
@@ -11,7 +13,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-namespace mcp::detail {
+namespace mcp::pal {
 
 namespace {
 
@@ -30,15 +32,15 @@ bool fill_addr(const std::string& host, std::uint16_t port, sockaddr_in& addr,
 
 }  // namespace
 
-int listen_tcp(const std::string& host, std::uint16_t port, std::string& error) {
+fd_t tcp_listen(const std::string& host, std::uint16_t port, std::string& error) {
     sockaddr_in addr;
     if (!fill_addr(host, port, addr, error)) {
-        return -1;
+        return kInvalidFd;
     }
-    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    const fd_t fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         error = std::strerror(errno);
-        return -1;
+        return kInvalidFd;
     }
     const int one = 1;
     ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
@@ -46,12 +48,12 @@ int listen_tcp(const std::string& host, std::uint16_t port, std::string& error) 
         ::listen(fd, 16) != 0) {
         error = std::strerror(errno);
         ::close(fd);
-        return -1;
+        return kInvalidFd;
     }
     return fd;
 }
 
-std::uint16_t local_port(int fd) {
+std::uint16_t tcp_local_port(fd_t fd) {
     sockaddr_in addr;
     socklen_t len = sizeof(addr);
     if (::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
@@ -60,16 +62,16 @@ std::uint16_t local_port(int fd) {
     return ntohs(addr.sin_port);
 }
 
-int connect_tcp(const std::string& host, std::uint16_t port, int timeout_ms,
-                std::string& error) {
+fd_t tcp_connect(const std::string& host, std::uint16_t port, int timeout_ms,
+                 std::string& error) {
     sockaddr_in addr;
     if (!fill_addr(host, port, addr, error)) {
-        return -1;
+        return kInvalidFd;
     }
-    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    const fd_t fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         error = std::strerror(errno);
-        return -1;
+        return kInvalidFd;
     }
 
     const int flags = ::fcntl(fd, F_GETFL, 0);
@@ -79,7 +81,7 @@ int connect_tcp(const std::string& host, std::uint16_t port, int timeout_ms,
     if (rc != 0 && errno != EINPROGRESS) {
         error = std::strerror(errno);
         ::close(fd);
-        return -1;
+        return kInvalidFd;
     }
     if (rc != 0) {
         struct pollfd pfd = {fd, POLLOUT, 0};
@@ -90,7 +92,7 @@ int connect_tcp(const std::string& host, std::uint16_t port, int timeout_ms,
         if (ready <= 0 || so_error != 0) {
             error = ready <= 0 ? "connect timed out" : std::strerror(so_error);
             ::close(fd);
-            return -1;
+            return kInvalidFd;
         }
     }
     ::fcntl(fd, F_SETFL, flags);
@@ -99,39 +101,9 @@ int connect_tcp(const std::string& host, std::uint16_t port, int timeout_ms,
     return fd;
 }
 
-int poll_readable(int fd, int wake_fd, int timeout_ms) {
-    struct pollfd fds[2] = {{fd, POLLIN, 0}, {wake_fd, POLLIN, 0}};
-    const nfds_t count = wake_fd >= 0 ? 2 : 1;
-    for (;;) {
-        const int rc = ::poll(fds, count, timeout_ms);
-        if (rc < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        if (rc == 0) {
-            return 0;  // timeout
-        }
-        if (count == 2 && fds[1].revents != 0) {
-            return 0;  // woken
-        }
-        if (fds[0].revents != 0) {
-            return 1;
-        }
-    }
+fd_t tcp_accept(fd_t listen_fd) {
+    const int fd = ::accept(listen_fd, nullptr, nullptr);
+    return fd < 0 ? kInvalidFd : fd;
 }
 
-long read_some(int fd, char* buffer, std::size_t size) {
-    for (;;) {
-        const ssize_t n = ::read(fd, buffer, size);
-        if (n >= 0) {
-            return static_cast<long>(n);
-        }
-        if (errno != EINTR) {
-            return -1;
-        }
-    }
-}
-
-}  // namespace mcp::detail
+}  // namespace mcp::pal

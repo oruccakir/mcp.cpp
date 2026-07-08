@@ -14,6 +14,7 @@
 
 #include <mcp/transport/http_server_transport.hpp>  // HttpServerOptions
 
+#include "../../platform/pal.hpp"
 #include "http_codec.hpp"
 
 namespace mcp::detail {
@@ -36,8 +37,8 @@ public:
 
     std::uint16_t port() const { return bound_port_.load(); }
     bool running() const { return running_.load(); }
-    /// Wake fd for long polls in handlers (readable once stop() begins).
-    int wake_fd() const { return wake_pipe_[0]; }
+    /// Wake event for long polls in handlers (signalled once stop() begins).
+    const pal::WakeEvent& wake() const { return wake_; }
 
     /// Writes a complete plain response (adds MCP-Protocol-Version).
     static void write_simple(int fd, int status, const std::string& reason,
@@ -53,14 +54,14 @@ private:
     HttpServerOptions options_;
     RequestHandler handler_;
     std::atomic<bool> running_{false};
-    int listen_fd_ = -1;
-    int wake_pipe_[2] = {-1, -1};
+    pal::fd_t listen_fd_ = pal::kInvalidFd;
+    pal::WakeEvent wake_;
     std::atomic<std::uint16_t> bound_port_{0};
     std::thread accept_thread_;
 
     std::mutex conn_mutex_;
     std::vector<std::thread> conn_threads_;
-    std::vector<int> conn_fds_;
+    std::vector<pal::fd_t> conn_fds_;
 };
 
 }  // namespace mcp::detail

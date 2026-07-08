@@ -1,16 +1,18 @@
 #include <mcp/transport/stdio_transport.hpp>
 
-#include <cerrno>
-
-#include <poll.h>
-#include <unistd.h>
-
-#include "line_io.hpp"
+#include "../platform/pal.hpp"
 
 namespace mcp {
 
+namespace {
+// stdin/stdout descriptor values are 0/1 on every supported platform's
+// C runtime; the PAL owns anything beyond that assumption.
+constexpr int kStdinFd = 0;
+constexpr int kStdoutFd = 1;
+}  // namespace
+
 StdioTransport::StdioTransport()
-    : in_fd_(STDIN_FILENO), out_fd_(STDOUT_FILENO), owns_fds_(false) {}
+    : in_fd_(kStdinFd), out_fd_(kStdoutFd), owns_fds_(false) {}
 
 StdioTransport::StdioTransport(int in_fd, int out_fd, bool owns_fds)
     : in_fd_(in_fd), out_fd_(out_fd), owns_fds_(owns_fds) {}
@@ -21,9 +23,10 @@ void StdioTransport::connect() {
     if (running_.exchange(true)) {
         return;
     }
-    if (::pipe(wake_pipe_) != 0) {
+    wake_ = std::make_unique<pal::WakeEvent>();
+    if (!wake_->valid()) {
         running_.store(false);
-        emit_error(Error(ErrorCode::InternalError, "failed to create wake pipe"));
+        emit_error(Error(ErrorCode::InternalError, "failed to create wake event"));
         return;
     }
     read_thread_ = std::thread([this] { read_loop(); });
@@ -31,29 +34,17 @@ void StdioTransport::connect() {
 
 void StdioTransport::disconnect() {
     const bool was_running = running_.exchange(false);
-    if (was_running && wake_pipe_[1] >= 0) {
-        const char byte = 0;
-        (void)detail::write_all(wake_pipe_[1], &byte, 1);
+    if (was_running && wake_) {
+        wake_->signal();
     }
     if (read_thread_.joinable() &&
         read_thread_.get_id() != std::this_thread::get_id()) {
         read_thread_.join();
     }
-    for (int* fd : {&wake_pipe_[0], &wake_pipe_[1]}) {
-        if (*fd >= 0) {
-            ::close(*fd);
-            *fd = -1;
-        }
-    }
+    wake_.reset();
     if (owns_fds_) {
-        if (in_fd_ >= 0) {
-            ::close(in_fd_);
-            in_fd_ = -1;
-        }
-        if (out_fd_ >= 0) {
-            ::close(out_fd_);
-            out_fd_ = -1;
-        }
+        pal::close_fd(in_fd_);
+        pal::close_fd(out_fd_);
     }
 }
 
@@ -63,7 +54,7 @@ void StdioTransport::write_line(const std::string& line) {
     }
     std::string framed = line;
     framed.push_back('\n');
-    if (!detail::write_all(out_fd_, framed.data(), framed.size())) {
+    if (!pal::write_all(out_fd_, framed.data(), framed.size())) {
         emit_error(Error(ErrorCode::InternalError, "stdio write failed"));
     }
 }
@@ -71,28 +62,21 @@ void StdioTransport::write_line(const std::string& line) {
 void StdioTransport::read_loop() {
     std::string buffer;
     while (running_.load()) {
-        struct pollfd fds[2] = {{in_fd_, POLLIN, 0}, {wake_pipe_[0], POLLIN, 0}};
-        const int rc = ::poll(fds, 2, -1);
-        if (rc < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
+        const int ready = pal::poll_readable(in_fd_, wake_.get(), -1);
+        if (ready < 0) {
             emit_error(Error(ErrorCode::InternalError, "stdio poll failed"));
             break;
         }
-        if (fds[1].revents != 0) {
-            return;  // disconnect() requested; no close event for local stop
-        }
-        if (fds[0].revents == 0) {
+        if (ready == 0) {
+            if (!running_.load()) {
+                return;  // disconnect() requested; no close event
+            }
             continue;
         }
 
         char chunk[4096];
-        const ssize_t n = ::read(in_fd_, chunk, sizeof(chunk));
+        const long n = pal::read_some(in_fd_, chunk, sizeof(chunk));
         if (n < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
             if (running_.load()) {
                 emit_error(Error(ErrorCode::InternalError, "stdio read failed"));
             }
