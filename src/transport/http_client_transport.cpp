@@ -72,10 +72,46 @@ void HttpClientTransport::connect() {
     }
 }
 
+std::string HttpClientTransport::session_id() const {
+    std::lock_guard<std::mutex> lock(
+        const_cast<std::mutex&>(state_mutex_));
+    return session_id_;
+}
+
+void HttpClientTransport::send_session_delete() {
+    std::string sid;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        sid = session_id_;
+    }
+    if (sid.empty()) {
+        return;
+    }
+    std::string error;
+    const int fd = detail::connect_tcp(options_.host, options_.port, 1000, error);
+    if (fd < 0) {
+        return;
+    }
+    const auto request = detail::serialize_request(
+        "DELETE", options_.path,
+        {{"Host", options_.host + ":" + std::to_string(options_.port)},
+         {"Mcp-Session-Id", sid},
+         {"MCP-Protocol-Version", kProtocolVersion},
+         {"Connection", "close"}},
+        "");
+    if (detail::write_all(fd, request.data(), request.size())) {
+        char buffer[512];
+        (void)detail::poll_readable(fd, -1, 500);
+        (void)detail::read_some(fd, buffer, sizeof(buffer));
+    }
+    ::close(fd);
+}
+
 void HttpClientTransport::disconnect() {
     if (!running_.exchange(false)) {
         return;
     }
+    send_session_delete();  // best-effort session termination
     if (wake_pipe_[1] >= 0) {
         const char byte = 0;
         (void)detail::write_all(wake_pipe_[1], &byte, 1);
@@ -144,6 +180,12 @@ void HttpClientTransport::post_payload(const std::string& body) {
     if (options_.origin) {
         headers.emplace_back("Origin", *options_.origin);
     }
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (!session_id_.empty()) {
+            headers.emplace_back("Mcp-Session-Id", session_id_);
+        }
+    }
     for (const auto& [name, value] : options_.headers) {
         headers.emplace_back(name, value);
     }
@@ -187,15 +229,29 @@ void HttpClientTransport::post_payload(const std::string& body) {
     }
     buffer.erase(0, consumed);
 
+    // Capture the server-assigned session id (Mcp-Session-Id).
+    if (const auto sid = head.header("mcp-session-id"); !sid.empty()) {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        session_id_ = sid;
+    }
+
     if (head.status == 202) {
         ::close(fd);
         return;  // notification/response accepted (FR-TRAN-006)
     }
     if (head.status != 200) {
         ::close(fd);
+        std::string hint;
+        {
+            std::lock_guard<std::mutex> lock(state_mutex_);
+            if (head.status == 404 && !session_id_.empty()) {
+                hint = " (session expired - reinitialize)";
+                session_id_.clear();
+            }
+        }
         emit_error(Error(ErrorCode::InternalError,
                          "HTTP " + std::to_string(head.status) + " " +
-                             head.reason));
+                             head.reason + hint));
         return;
     }
 
@@ -285,6 +341,12 @@ void HttpClientTransport::sse_loop() {
         if (run_sse_once()) {
             failures = 0;
         } else {
+            // Session-managed servers reject GETs until initialize has
+            // assigned an id; don't count those warm-up attempts.
+            if (session_id().empty()) {
+                (void)detail::poll_readable(wake_pipe_[0], -1, 200);
+                continue;
+            }
             ++failures;
             if (options_.max_reconnect_attempts > 0 &&
                 failures >= options_.max_reconnect_attempts) {
@@ -330,6 +392,9 @@ bool HttpClientTransport::run_sse_once() {
         if (!last_event_id_.empty()) {
             // Resume after the last delivered event (FR-TRAN-009).
             headers.emplace_back("Last-Event-ID", last_event_id_);
+        }
+        if (!session_id_.empty()) {
+            headers.emplace_back("Mcp-Session-Id", session_id_);
         }
     }
     for (const auto& [name, value] : options_.headers) {

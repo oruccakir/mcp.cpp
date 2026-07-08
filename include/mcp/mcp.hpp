@@ -25,6 +25,7 @@
 #include <mcp/server/tool_registry.hpp>
 #include <mcp/transport/http_client_transport.hpp>
 #include <mcp/transport/http_server_transport.hpp>
+#include <mcp/transport/http_session_server.hpp>
 #include <mcp/transport/stdio_client_transport.hpp>
 #include <mcp/transport/stdio_transport.hpp>
 #include <mcp/transport/transport.hpp>

@@ -53,12 +53,18 @@ public:
     void set_error_handler(std::function<void(Error)> handler) override;
     void set_close_handler(std::function<void()> handler) override;
 
+    /// Session id assigned by the server (Mcp-Session-Id), if any. Captured
+    /// from response headers and echoed on subsequent requests; disconnect()
+    /// sends a best-effort DELETE for it.
+    std::string session_id() const;
+
 private:
     void sse_loop();
     /// One SSE connection; returns true if it delivered any event (resets
     /// the failure counter).
     bool run_sse_once();
     void post_payload(const std::string& body);
+    void send_session_delete();
     void deliver_frame(const std::string& payload);
     void emit_error(const Error& error);
     void emit_close();
@@ -71,6 +77,7 @@ private:
 
     std::mutex state_mutex_;
     std::string last_event_id_;
+    std::string session_id_;
     int retry_ms_;
 
     std::mutex handler_mutex_;
