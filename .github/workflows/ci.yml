@@ -7,13 +7,21 @@ on:
 
 jobs:
   build-and-test:
-    name: ${{ matrix.compiler }} / ${{ matrix.build_type }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} / ${{ matrix.compiler }} / ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         compiler: [gcc, clang]
         build_type: [Debug, Release]
+        include:
+          - os: macos-latest
+            compiler: clang
+            build_type: Debug
+          - os: macos-latest
+            compiler: clang
+            build_type: Release
     steps:
       - uses: actions/checkout@v4
 
