@@ -55,3 +55,23 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+
+  install-consumer:
+    name: install & consume
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and install the SDK
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          -DMCP_BUILD_TESTS=OFF -DMCP_BUILD_EXAMPLES=OFF
+          && cmake --build build -j
+          && cmake --install build --prefix "$PWD/prefix"
+
+      - name: Build and run a find_package(mcp) consumer
+        run: >
+          cmake -B consumer-build -S tests/consumer
+          -DCMAKE_PREFIX_PATH="$PWD/prefix"
+          && cmake --build consumer-build -j
+          && ./consumer-build/consumer
