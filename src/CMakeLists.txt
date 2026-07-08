@@ -5,6 +5,7 @@ add_library(mcp-core STATIC
     core/session.cpp
     core/content.cpp
     core/schema.cpp
+    core/log.cpp
 )
 add_library(mcp::core ALIAS mcp-core)
 target_include_directories(mcp-core PUBLIC
@@ -16,6 +17,9 @@ target_link_libraries(mcp-core PUBLIC
     Threads::Threads
 )
 target_compile_features(mcp-core PUBLIC cxx_std_17)
+if(MCP_ENABLE_LOGGING)
+    target_compile_definitions(mcp-core PUBLIC MCP_LOG_ENABLED)
+endif()
 mcp_set_warnings(mcp-core)
 
 # Platform Abstraction Layer backend selection (SRS §3.1, FR-EMB-002).
