@@ -68,7 +68,7 @@ public:
 
 private:
     void handle_request(const detail::HttpHead& head, const std::string& body,
-                        int fd);
+                        std::intptr_t fd);
 
     HttpSessionServerOptions options_;
     SessionFactory factory_;

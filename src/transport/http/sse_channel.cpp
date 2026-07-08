@@ -25,7 +25,7 @@ void SseChannel::enqueue(const std::string& payload) {
     cv_.notify_all();
 }
 
-void SseChannel::attach_stream(int fd, const std::string& last_event_id,
+void SseChannel::attach_stream(std::intptr_t fd, const std::string& last_event_id,
                                const std::string& protocol_version_header) {
     std::uint64_t my_generation;
     std::uint64_t cursor;

@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -54,6 +55,7 @@ private:
 
     std::atomic<bool> running_{false};
     std::atomic<std::int64_t> child_pid_{-1};
+    std::atomic<std::intptr_t> child_handle_{0};
     std::atomic<int> exit_status_{-1};
     std::atomic<bool> exited_{false};
 

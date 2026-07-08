@@ -44,9 +44,11 @@ void StdioClientTransport::connect() {
         return;
     }
     child_pid_.store(process.pid);
-    stdin_fd_ = process.stdin_fd;
-    stdout_fd_ = process.stdout_fd;
-    stderr_fd_ = process.stderr_fd;
+    child_handle_.store(process.native_handle);
+    // Pipe descriptors are CRT fds on every backend: they fit in int.
+    stdin_fd_ = static_cast<int>(process.stdin_fd);
+    stdout_fd_ = static_cast<int>(process.stdout_fd);
+    stderr_fd_ = static_cast<int>(process.stderr_fd);
 
     stdout_thread_ = std::thread([this] { stdout_loop(); });
     stderr_thread_ = std::thread([this] { stderr_loop(); });
@@ -107,6 +109,7 @@ void StdioClientTransport::disconnect() {
 
     pal::Process process;
     process.pid = child_pid_.load();
+    process.native_handle = child_handle_.load();
     process.stdin_fd = stdin_fd_;
     process.stdout_fd = stdout_fd_;
     process.stderr_fd = stderr_fd_;

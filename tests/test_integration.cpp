@@ -8,10 +8,10 @@
 #include <mutex>
 #include <vector>
 
-#include <sys/wait.h>
-
 #include <mcp/core/session.hpp>
 #include <mcp/transport/stdio_client_transport.hpp>
+
+#include "../src/platform/pal.hpp"
 
 namespace {
 
@@ -71,10 +71,14 @@ TEST(Integration, FullHandshakeAndEchoRoundTrip) {
     session.disconnect();
     auto status = transport->exit_status();
     ASSERT_TRUE(status.has_value());
-    EXPECT_TRUE(WIFEXITED(*status));
-    EXPECT_EQ(WEXITSTATUS(*status), 0);
+    EXPECT_TRUE(pal::exited_normally(*status));
+    EXPECT_EQ(pal::exit_code(*status), 0);
 }
 
+#ifndef _WIN32
+// POSIX-specific semantics: exec-failure exit code 127 and /bin/sh below.
+// Windows equivalents (CreateProcess failure surfaces as a spawn error)
+// belong to the win32 backend's own coverage.
 TEST(Integration, FailedSpawnReportsClose) {
     StdioServerParameters parameters;
     parameters.command = "/nonexistent/mcp-server-binary";
@@ -104,8 +108,8 @@ TEST(Integration, FailedSpawnReportsClose) {
     transport->disconnect();
     auto status = transport->exit_status();
     ASSERT_TRUE(status.has_value());
-    EXPECT_TRUE(WIFEXITED(*status));
-    EXPECT_EQ(WEXITSTATUS(*status), 127);
+    EXPECT_TRUE(pal::exited_normally(*status));
+    EXPECT_EQ(pal::exit_code(*status), 127);
 }
 
 TEST(Integration, EnvAndArgsArePassedToChild) {
@@ -141,5 +145,6 @@ TEST(Integration, EnvAndArgsArePassedToChild) {
 
     transport->disconnect();
 }
+#endif  // !_WIN32
 
 }  // namespace
