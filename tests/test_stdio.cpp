@@ -107,6 +107,12 @@ TEST(StdioTransport, SendReceiveAcrossPipes) {
     b.send(Message(response));
     ASSERT_TRUE(sink_a.wait_for([&] { return sink_a.messages.size() == 1; }));
     EXPECT_FALSE(std::get<JsonRpcResponse>(sink_a.messages[0]).is_error());
+
+    // Join reader threads before the sinks go out of scope: a transport
+    // destructor closing its fds EOFs the peer, whose reader would other-
+    // wise call into an already-destroyed Sink.
+    a.disconnect();
+    b.disconnect();
 }
 
 TEST(StdioTransport, BatchDeliversAllMessages) {
@@ -127,6 +133,9 @@ TEST(StdioTransport, BatchDeliversAllMessages) {
     ASSERT_TRUE(sink_b.wait_for([&] { return sink_b.messages.size() == 2; }));
     EXPECT_TRUE(std::holds_alternative<JsonRpcRequest>(sink_b.messages[0]));
     EXPECT_TRUE(std::holds_alternative<JsonRpcNotification>(sink_b.messages[1]));
+
+    a.disconnect();
+    b.disconnect();
 }
 
 TEST(StdioTransport, NewlinesInPayloadSurviveFraming) {
@@ -145,6 +154,9 @@ TEST(StdioTransport, NewlinesInPayloadSurviveFraming) {
     ASSERT_TRUE(sink_b.wait_for([&] { return sink_b.messages.size() == 1; }));
     const auto& request = std::get<JsonRpcRequest>(sink_b.messages[0]);
     EXPECT_EQ(request.params->at("text").get<std::string>(), "one\ntwo\nthree");
+
+    a.disconnect();
+    b.disconnect();
 }
 
 TEST(StdioTransport, GarbageLineSurfacesParseError) {
@@ -165,6 +177,7 @@ TEST(StdioTransport, GarbageLineSurfacesParseError) {
     // Closing the peer's write end delivers EOF -> close event.
     fd_close(input.write_fd());
     ASSERT_TRUE(sink.wait_for([&] { return sink.closed; }));
+    t.disconnect();
     fd_close(output.read_fd());
 }
 
@@ -183,6 +196,7 @@ TEST(StdioTransport, MultipleMessagesInOneWrite) {
               static_cast<long>(two.size()));
 
     ASSERT_TRUE(sink.wait_for([&] { return sink.messages.size() == 2; }));
+    t.disconnect();  // join the reader before Sink is destroyed
     fd_close(input.write_fd());
     fd_close(output.read_fd());
 }
