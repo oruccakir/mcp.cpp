@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **HTTP transport security note (FR-TRAN-008):** TLS is intentionally out of scope — deploy behind a reverse proxy that terminates TLS. The server binds 127.0.0.1 by default. Only `localhost` origins are accepted unless `HttpServerOptions::allowed_origins` is populated; use the `authorize` hook for bearer-token / custom auth (return false → 401).
 
+**Platform Abstraction Layer (PAL):** all OS access goes through `mcp::pal` (src/platform/pal.hpp) — descriptor I/O, `WakeEvent` (cross-thread poll unblocking), TCP, child processes, signal setup. Backends are selected at build time in src/CMakeLists.txt (`MCP_PAL_SOURCES`); posix/ (Linux + macOS, CI-verified) is the only backend so far, win32/vxworks/freertos are future additions. **Never include OS headers (`<unistd.h>`, `<sys/*>`, `<poll.h>`, `<csignal>`, sockets) outside src/platform/<backend>/** — the guard-rail is `grep -rln 'include <sys/\|include <unistd\|include <arpa\|include <netinet\|include <poll\|include <csignal' src/` returning only platform backend files. Keep the pal surface narrow: add a function only when a transport needs it and it differs across platforms.
+
 **Concurrency gotcha:** message dispatch is synchronous on the transport read thread. A server request handler must never block waiting on a client round-trip (deadlock) — do that work on a separate thread (see tests/tools/prober_stdio.cpp and the `Server::session()` doc comment).
 
 **`SRS.md` is the authoritative source of truth** for all requirements, architecture, and design decisions. Every requirement has an ID (e.g., `FR-CORE-001`) that should be traceable to implementation and tests.

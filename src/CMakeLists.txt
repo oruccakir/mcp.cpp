@@ -18,13 +18,27 @@ target_link_libraries(mcp-core PUBLIC
 target_compile_features(mcp-core PUBLIC cxx_std_17)
 mcp_set_warnings(mcp-core)
 
-# mcp-transport: stdio + Streamable HTTP transports (POSIX)
+# Platform Abstraction Layer backend selection (SRS §3.1, FR-EMB-002).
+# Transports only ever call the pal:: API from src/platform/pal.hpp; adding
+# an OS means adding a backend directory here, not touching transport code.
+if(UNIX)
+    set(MCP_PAL_SOURCES
+        platform/posix/io.cpp
+        platform/posix/net.cpp
+        platform/posix/process.cpp
+    )
+else()
+    message(FATAL_ERROR
+        "No PAL backend for this platform yet (POSIX only; win32 planned)")
+endif()
+
+# mcp-transport: stdio + Streamable HTTP transports over the PAL
 add_library(mcp-transport STATIC
+    ${MCP_PAL_SOURCES}
     transport/line_transport.cpp
     transport/line_io.cpp
     transport/stdio_transport.cpp
     transport/stdio_client_transport.cpp
-    transport/http/socket_util.cpp
     transport/http/http_codec.cpp
     transport/http/http_endpoint.cpp
     transport/http/sse_channel.cpp
@@ -33,6 +47,7 @@ add_library(mcp-transport STATIC
     transport/http_session_server.cpp
 )
 add_library(mcp::transport ALIAS mcp-transport)
+target_include_directories(mcp-transport PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mcp-transport PUBLIC mcp-core)
 mcp_set_warnings(mcp-transport)
 
