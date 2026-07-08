@@ -86,6 +86,22 @@ ctest --test-dir build --output-on-failure
 
 CMake targets to link against: `mcp::core`, `mcp::transport`, `mcp::server`, `mcp::client`.
 
+## Installing
+
+```bash
+cmake --preset release && cmake --build --preset release -j
+cmake --install build/release --prefix /your/prefix
+```
+
+Then from any project:
+
+```cmake
+find_package(mcp CONFIG REQUIRED)   # CMAKE_PREFIX_PATH=/your/prefix
+target_link_libraries(app PRIVATE mcp::server mcp::transport)
+```
+
+The install is self-contained (the bundled nlohmann/json ships under `include/mcp/vendor` — no external dependency to resolve). `MCP_BUILD_SERVER`/`MCP_BUILD_CLIENT` (default ON) trim the package for minimal consumers. Alternatives: plain `add_subdirectory`/FetchContent of this repo; a vcpkg overlay port under `ports/` (`--overlay-ports=<repo>/ports`); a `conanfile.py` for Conan 2. The vcpkg/Conan recipes become publishable once the repo has a release tag and a LICENSE file.
+
 ## Usage
 
 ### Serving over HTTP (multi-session)
