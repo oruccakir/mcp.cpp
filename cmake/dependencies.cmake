@@ -1,17 +1,15 @@
 include(FetchContent)
 
-# nlohmann/json 3.11+ (FR-BUILD-004). Prefer a system/package-manager
-# install; otherwise use the vendored single header (third_party/nlohmann,
-# v3.11.3, MIT) — no network access at configure time.
-find_package(nlohmann_json 3.11 QUIET)
-if(NOT nlohmann_json_FOUND)
-    add_library(nlohmann_json INTERFACE)
-    add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
-    target_include_directories(nlohmann_json INTERFACE
-        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party>
-        $<INSTALL_INTERFACE:include>)
-    message(STATUS "nlohmann/json: using vendored third_party/nlohmann (3.11.3)")
-endif()
+# nlohmann/json 3.11.3, always vendored (third_party/, MIT): deterministic
+# builds and a self-contained install export — consumers of an installed
+# mcp package need no json find_dependency (FR-BUILD-004). Distro packagers
+# may patch this to a system package. Installed under include/mcp/vendor so
+# it cannot clash with a real nlohmann install in the same prefix.
+add_library(nlohmann_json INTERFACE)
+add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
+target_include_directories(nlohmann_json INTERFACE
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party>
+    $<INSTALL_INTERFACE:include/mcp/vendor>)
 
 if(MCP_BUILD_TESTS)
     find_package(GTest 1.12 QUIET)

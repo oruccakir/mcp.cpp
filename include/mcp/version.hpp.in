@@ -1,0 +1,8 @@
+#pragma once
+
+// Generated from version.hpp.in by CMake — do not edit the generated file.
+
+#define MCP_CPP_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define MCP_CPP_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define MCP_CPP_VERSION_PATCH @PROJECT_VERSION_PATCH@
+#define MCP_CPP_VERSION "@PROJECT_VERSION@"
