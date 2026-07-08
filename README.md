@@ -64,7 +64,7 @@ That's a complete MCP server: capabilities are derived automatically from what y
 
 ## Building
 
-Requirements: CMake ≥ 3.20, a C++17 compiler (GCC/Clang tested in CI). nlohmann/json and GoogleTest are found on the system or fetched automatically.
+Requirements: CMake ≥ 3.20, a C++17 compiler (GCC/Clang tested in CI). nlohmann/json is bundled (third_party/, used when no system package is found — no network needed); GoogleTest is found on the system or fetched for tests.
 
 With CMake presets (≥3.21 — recommended):
 
