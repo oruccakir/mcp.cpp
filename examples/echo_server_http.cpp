@@ -17,11 +17,16 @@
 
 int main(int argc, char** argv) {
     mcp::HttpSessionServerOptions options;
-    options.http.port = 3001;
+    options.http.port = 3002;
     for (int i = 1; i + 1 < argc; ++i) {
         if (std::strcmp(argv[i], "--port") == 0) {
             options.http.port =
                 static_cast<std::uint16_t>(std::atoi(argv[i + 1]));
+        } else if (std::strcmp(argv[i], "--host") == 0) {
+            // Default stays 127.0.0.1 (FR-TRAN-008). Binding 0.0.0.0 exposes
+            // the server to the network: front it with a TLS-terminating
+            // reverse proxy and configure allowed_origins / authorize.
+            options.http.host = argv[i + 1];
         }
     }
 
