@@ -33,6 +33,7 @@ add_executable(mcp_tests
     test_client_integration.cpp
     test_http_codec.cpp
     test_http_transport.cpp
+    test_http_session.cpp
     test_http_integration.cpp
 )
 target_link_libraries(mcp_tests PRIVATE
