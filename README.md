@@ -64,7 +64,7 @@ That's a complete MCP server: capabilities are derived automatically from what y
 
 ## Building
 
-Requirements: CMake ≥ 3.20, a C++17 compiler (GCC/Clang tested in CI). nlohmann/json and GoogleTest are found on the system or fetched automatically.
+Requirements: CMake ≥ 3.20, a C++17 compiler — GCC/Clang (Linux), AppleClang (macOS), and MSVC (Windows) are all CI-tested. nlohmann/json and GoogleTest are found on the system or fetched automatically.
 
 ```bash
 cmake -B build -DMCP_BUILD_TESTS=ON -DMCP_BUILD_EXAMPLES=ON
@@ -183,7 +183,7 @@ TLS is intentionally out of scope — deploy behind a reverse proxy that termina
 
 Implemented (SRS phases 1–4): protocol core, server SDK, client SDK, stdio + Streamable HTTP transports with `Mcp-Session-Id` session management.
 
-Planned (phase 5+): embedded profile (`-fno-exceptions`, `-fno-rtti`, custom allocators — the `Result<T,E>` API is already in place for it), Windows support, vcpkg/Conan packaging, full JSON Schema 2020-12 validation, spec-conformance suite, C++20 coroutine API.
+Planned (phase 5+): embedded profile (`-fno-exceptions`, `-fno-rtti`, custom allocators — the `Result<T,E>` API is already in place for it), vcpkg/Conan packaging, full JSON Schema 2020-12 validation, spec-conformance suite, C++20 coroutine API.
 
 ## Design notes
 
