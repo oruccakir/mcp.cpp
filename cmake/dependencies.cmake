@@ -1,14 +1,16 @@
 include(FetchContent)
 
-# nlohmann/json 3.11+ (FR-BUILD-004). Prefer a system/package-manager install;
-# fall back to FetchContent so a bare checkout still builds.
+# nlohmann/json 3.11+ (FR-BUILD-004). Prefer a system/package-manager
+# install; otherwise use the vendored single header (third_party/nlohmann,
+# v3.11.3, MIT) — no network access at configure time.
 find_package(nlohmann_json 3.11 QUIET)
 if(NOT nlohmann_json_FOUND)
-    FetchContent_Declare(nlohmann_json
-        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
-        URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
-    FetchContent_MakeAvailable(nlohmann_json)
+    add_library(nlohmann_json INTERFACE)
+    add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
+    target_include_directories(nlohmann_json INTERFACE
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party>
+        $<INSTALL_INTERFACE:include>)
+    message(STATUS "nlohmann/json: using vendored third_party/nlohmann (3.11.3)")
 endif()
 
 if(MCP_BUILD_TESTS)

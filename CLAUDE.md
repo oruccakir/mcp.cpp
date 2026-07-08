@@ -43,7 +43,7 @@ Umbrella target: `mcp::all`. Error codes: standard JSON-RPC (-32700…-32603) pl
 cmake --preset dev && cmake --build --preset dev -j && ctest --preset dev   # preferred (build/dev/)
 ctest --preset dev -R 'ServerSession.Handshake'     # single test (regex on Suite.Name)
 
-cmake -B build -DMCP_BUILD_TESTS=ON   # classic flow still works (fetches nlohmann/json if needed)
+cmake -B build -DMCP_BUILD_TESTS=ON   # classic flow still works (vendored nlohmann/json, no network)
 cmake --build build -j && ctest --test-dir build --output-on-failure
 ```
 
@@ -53,7 +53,7 @@ Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON a
 
 Library targets: `mcp::core` (engine, sessions, content, schema), `mcp::transport` (stdio + Streamable HTTP), `mcp::server` (tools/resources/prompts/logging/completions + `mcp::Server` facade), `mcp::client` (sampling/roots/elicitation + `mcp::Client` facade; links mcp-server for the shared feature types). Example servers live in examples/ (echo, calculator, echo_server_http).
 
-Dependencies: nlohmann/json 3.11+ (required, FetchContent fallback), GoogleTest (system or FetchContent), Threads. CI (`.github/workflows/ci.yml`) runs ubuntu {gcc, clang} × {Debug, Release} with `-DMCP_WERROR=ON`.
+Dependencies: nlohmann/json 3.11+ (vendored in third_party/, system package preferred when present), GoogleTest (system or FetchContent, tests only), Threads. CI (`.github/workflows/ci.yml`) runs ubuntu {gcc, clang} × {Debug, Release} with `-DMCP_WERROR=ON`.
 
 Manual smoke test of the protocol: pipe newline-delimited JSON-RPC into `./build/tests/echo_stdio` (see tests/tools/echo_stdio.cpp), or run `./build/examples/echo_server_http --port 3001` and POST JSON-RPC to `http://127.0.0.1:3001/mcp` (GET that URL with `Accept: text/event-stream` for the SSE stream).
 
