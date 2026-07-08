@@ -47,4 +47,9 @@ add_dependencies(mcp_tests echo_stdio toolbox_stdio prober_stdio echo_server_htt
 mcp_set_warnings(mcp_tests)
 
 include(GoogleTest)
-gtest_discover_tests(mcp_tests PROPERTIES TIMEOUT 60)
+# PRE_TEST + generous discovery timeout: Windows runners routinely exceed
+# the 5s build-time default just starting the (Debug) test binary.
+gtest_discover_tests(mcp_tests
+    PROPERTIES TIMEOUT 60
+    DISCOVERY_TIMEOUT 30
+    DISCOVERY_MODE PRE_TEST)
