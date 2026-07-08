@@ -76,6 +76,13 @@ void close_fd(fd_t& fd) {
     fd = kInvalidFd;
 }
 
+void close_fd(int& fd) {
+    if (fd >= 0) {
+        ::_close(fd);  // int descriptors are CRT fds by construction
+        fd = -1;
+    }
+}
+
 void shutdown_fd(fd_t fd) {
     if (fd >= 0 && is_socket(fd)) {
         ::shutdown(static_cast<SOCKET>(fd), SD_BOTH);

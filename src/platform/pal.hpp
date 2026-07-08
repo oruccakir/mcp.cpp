@@ -41,6 +41,11 @@ bool write_all(fd_t fd, const char* data, std::size_t size);
 
 /// Closes and invalidates. No-op on kInvalidFd.
 void close_fd(fd_t& fd);
+#if defined(_WIN32)
+/// Overload for int-typed CRT descriptors (pipes/stdio held by transports);
+/// on POSIX fd_t is already int so the primary overload covers this.
+void close_fd(int& fd);
+#endif
 
 /// Shuts down both directions (sockets); safe on non-sockets.
 void shutdown_fd(fd_t fd);
