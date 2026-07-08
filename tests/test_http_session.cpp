@@ -9,15 +9,13 @@
 #include <mutex>
 #include <thread>
 
-#include <unistd.h>
 
 #include <mcp/client/client.hpp>
 #include <mcp/server/server.hpp>
 #include <mcp/transport/http_client_transport.hpp>
 #include <mcp/transport/http_session_server.hpp>
 
-#include "../src/transport/http/socket_util.hpp"
-#include "../src/transport/line_io.hpp"
+#include "../src/platform/pal.hpp"
 
 namespace {
 
@@ -26,25 +24,25 @@ using namespace mcp;
 std::string raw_request(std::uint16_t port, const std::string& text,
                         int idle_timeout_ms = 1000) {
     std::string error;
-    const int fd = detail::connect_tcp("127.0.0.1", port, 2000, error);
-    EXPECT_GE(fd, 0) << error;
-    if (fd < 0) {
+    pal::fd_t fd = pal::tcp_connect("127.0.0.1", port, 2000, error);
+    EXPECT_NE(fd, pal::kInvalidFd) << error;
+    if (fd == pal::kInvalidFd) {
         return {};
     }
-    EXPECT_TRUE(detail::write_all(fd, text.data(), text.size()));
+    EXPECT_TRUE(pal::write_all(fd, text.data(), text.size()));
     std::string out;
     char buffer[4096];
     for (;;) {
-        if (detail::poll_readable(fd, -1, idle_timeout_ms) != 1) {
+        if (pal::poll_readable(fd, nullptr, idle_timeout_ms) != 1) {
             break;
         }
-        const long n = detail::read_some(fd, buffer, sizeof(buffer));
+        const long n = pal::read_some(fd, buffer, sizeof(buffer));
         if (n <= 0) {
             break;
         }
         out.append(buffer, static_cast<std::size_t>(n));
     }
-    ::close(fd);
+    pal::close_fd(fd);
     return out;
 }
 

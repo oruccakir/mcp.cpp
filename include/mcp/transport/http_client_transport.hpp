@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -11,6 +12,10 @@
 #include <vector>
 
 #include <mcp/transport/transport.hpp>
+
+namespace mcp::pal {
+class WakeEvent;
+}
 
 namespace mcp {
 
@@ -72,7 +77,7 @@ private:
     HttpClientOptions options_;
     std::atomic<bool> running_{false};
     std::atomic<bool> close_emitted_{false};
-    int wake_pipe_[2] = {-1, -1};
+    std::unique_ptr<pal::WakeEvent> wake_;
     std::thread sse_thread_;
 
     std::mutex state_mutex_;

@@ -1,16 +1,11 @@
 #include <mcp/transport/http_client_transport.hpp>
 
-#include <csignal>
 #include <cstdlib>
-
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include <mcp/types.hpp>
 
+#include "../platform/pal.hpp"
 #include "http/http_codec.hpp"
-#include "http/socket_util.hpp"
-#include "line_io.hpp"
 
 namespace mcp {
 
@@ -57,21 +52,6 @@ void HttpClientTransport::emit_close() {
     }
 }
 
-void HttpClientTransport::connect() {
-    if (running_.exchange(true)) {
-        return;
-    }
-    ::signal(SIGPIPE, SIG_IGN);
-    if (::pipe(wake_pipe_) != 0) {
-        running_.store(false);
-        emit_error(Error(ErrorCode::InternalError, "failed to create wake pipe"));
-        return;
-    }
-    if (options_.open_sse_stream) {
-        sse_thread_ = std::thread([this] { sse_loop(); });
-    }
-}
-
 std::string HttpClientTransport::session_id() const {
     std::lock_guard<std::mutex> lock(
         const_cast<std::mutex&>(state_mutex_));
@@ -88,8 +68,8 @@ void HttpClientTransport::send_session_delete() {
         return;
     }
     std::string error;
-    const int fd = detail::connect_tcp(options_.host, options_.port, 1000, error);
-    if (fd < 0) {
+    pal::fd_t fd = pal::tcp_connect(options_.host, options_.port, 1000, error);
+    if (fd == pal::kInvalidFd) {
         return;
     }
     const auto request = detail::serialize_request(
@@ -99,12 +79,28 @@ void HttpClientTransport::send_session_delete() {
          {"MCP-Protocol-Version", kProtocolVersion},
          {"Connection", "close"}},
         "");
-    if (detail::write_all(fd, request.data(), request.size())) {
+    if (pal::write_all(fd, request.data(), request.size())) {
         char buffer[512];
-        (void)detail::poll_readable(fd, -1, 500);
-        (void)detail::read_some(fd, buffer, sizeof(buffer));
+        (void)pal::poll_readable(fd, nullptr, 500);
+        (void)pal::read_some(fd, buffer, sizeof(buffer));
     }
-    ::close(fd);
+    pal::close_fd(fd);
+}
+
+void HttpClientTransport::connect() {
+    if (running_.exchange(true)) {
+        return;
+    }
+    pal::ignore_broken_pipe_signals();
+    wake_ = std::make_unique<pal::WakeEvent>();
+    if (!wake_->valid()) {
+        running_.store(false);
+        emit_error(Error(ErrorCode::InternalError, "failed to create wake event"));
+        return;
+    }
+    if (options_.open_sse_stream) {
+        sse_thread_ = std::thread([this] { sse_loop(); });
+    }
 }
 
 void HttpClientTransport::disconnect() {
@@ -112,20 +108,14 @@ void HttpClientTransport::disconnect() {
         return;
     }
     send_session_delete();  // best-effort session termination
-    if (wake_pipe_[1] >= 0) {
-        const char byte = 0;
-        (void)detail::write_all(wake_pipe_[1], &byte, 1);
+    if (wake_) {
+        wake_->signal();
     }
     if (sse_thread_.joinable() &&
         sse_thread_.get_id() != std::this_thread::get_id()) {
         sse_thread_.join();
     }
-    for (int* fd : {&wake_pipe_[0], &wake_pipe_[1]}) {
-        if (*fd >= 0) {
-            ::close(*fd);
-            *fd = -1;
-        }
-    }
+    wake_.reset();
 }
 
 void HttpClientTransport::deliver_frame(const std::string& payload) {
@@ -163,9 +153,9 @@ void HttpClientTransport::send_batch(const std::vector<Message>& messages) {
 
 void HttpClientTransport::post_payload(const std::string& body) {
     std::string error;
-    const int fd = detail::connect_tcp(options_.host, options_.port,
-                                       options_.connect_timeout_ms, error);
-    if (fd < 0) {
+    pal::fd_t fd = pal::tcp_connect(options_.host, options_.port,
+                                    options_.connect_timeout_ms, error);
+    if (fd == pal::kInvalidFd) {
         emit_error(Error(ErrorCode::InternalError, "http connect failed: " + error));
         return;
     }
@@ -191,8 +181,8 @@ void HttpClientTransport::post_payload(const std::string& body) {
     }
     const auto request =
         detail::serialize_request("POST", options_.path, headers, body);
-    if (!detail::write_all(fd, request.data(), request.size())) {
-        ::close(fd);
+    if (!pal::write_all(fd, request.data(), request.size())) {
+        pal::close_fd(fd);
         emit_error(Error(ErrorCode::InternalError, "http write failed"));
         return;
     }
@@ -204,15 +194,15 @@ void HttpClientTransport::post_payload(const std::string& body) {
     std::string parse_error;
     bool have_head = false;
     while (!have_head) {
-        if (detail::poll_readable(fd, wake_pipe_[0], 30000) != 1 ||
+        if (pal::poll_readable(fd, wake_.get(), 30000) != 1 ||
             !running_.load()) {
-            ::close(fd);
+            pal::close_fd(fd);
             return;
         }
         char chunk[8192];
-        const long n = detail::read_some(fd, chunk, sizeof(chunk));
+        const long n = pal::read_some(fd, chunk, sizeof(chunk));
         if (n <= 0) {
-            ::close(fd);
+            pal::close_fd(fd);
             emit_error(Error(ErrorCode::InternalError,
                              "connection closed before HTTP response"));
             return;
@@ -221,7 +211,7 @@ void HttpClientTransport::post_payload(const std::string& body) {
         have_head = detail::parse_head(buffer, /*request_mode=*/false, head,
                                        consumed, parse_error);
         if (!have_head && !parse_error.empty()) {
-            ::close(fd);
+            pal::close_fd(fd);
             emit_error(Error(ErrorCode::InternalError,
                              "malformed HTTP response: " + parse_error));
             return;
@@ -236,11 +226,11 @@ void HttpClientTransport::post_payload(const std::string& body) {
     }
 
     if (head.status == 202) {
-        ::close(fd);
+        pal::close_fd(fd);
         return;  // notification/response accepted (FR-TRAN-006)
     }
     if (head.status != 200) {
-        ::close(fd);
+        pal::close_fd(fd);
         std::string hint;
         {
             std::lock_guard<std::mutex> lock(state_mutex_);
@@ -271,18 +261,18 @@ void HttpClientTransport::post_payload(const std::string& body) {
                 deliver_frame(event.data);
             }
             events.clear();
-            if (detail::poll_readable(fd, wake_pipe_[0], 30000) != 1 ||
+            if (pal::poll_readable(fd, wake_.get(), 30000) != 1 ||
                 !running_.load()) {
                 break;
             }
             char chunk[8192];
-            const long n = detail::read_some(fd, chunk, sizeof(chunk));
+            const long n = pal::read_some(fd, chunk, sizeof(chunk));
             if (n <= 0) {
                 break;
             }
             parser.feed(chunk, static_cast<std::size_t>(n), events);
         }
-        ::close(fd);
+        pal::close_fd(fd);
         return;
     }
 
@@ -301,7 +291,7 @@ void HttpClientTransport::post_payload(const std::string& body) {
                 break;
             }
             if (status == detail::ChunkedDecoder::Status::Error) {
-                ::close(fd);
+                pal::close_fd(fd);
                 emit_error(Error(ErrorCode::InternalError,
                                  "malformed chunked encoding"));
                 return;
@@ -312,16 +302,16 @@ void HttpClientTransport::post_payload(const std::string& body) {
                 break;
             }
         }
-        if (detail::poll_readable(fd, wake_pipe_[0], 30000) != 1 ||
+        if (pal::poll_readable(fd, wake_.get(), 30000) != 1 ||
             !running_.load()) {
-            ::close(fd);
+            pal::close_fd(fd);
             return;
         }
         char chunk[8192];
-        const long n = detail::read_some(fd, chunk, sizeof(chunk));
+        const long n = pal::read_some(fd, chunk, sizeof(chunk));
         if (n <= 0) {
             if (is_chunked || !length_header.empty()) {
-                ::close(fd);
+                pal::close_fd(fd);
                 emit_error(Error(ErrorCode::InternalError,
                                  "truncated HTTP response body"));
                 return;
@@ -331,7 +321,7 @@ void HttpClientTransport::post_payload(const std::string& body) {
         }
         buffer.append(chunk, static_cast<std::size_t>(n));
     }
-    ::close(fd);
+    pal::close_fd(fd);
     deliver_frame(body_out);
 }
 
@@ -344,7 +334,7 @@ void HttpClientTransport::sse_loop() {
             // Session-managed servers reject GETs until initialize has
             // assigned an id; don't count those warm-up attempts.
             if (session_id().empty()) {
-                (void)detail::poll_readable(wake_pipe_[0], -1, 200);
+                (void)pal::poll_readable(wake_->poll_handle(), nullptr, 200);
                 continue;
             }
             ++failures;
@@ -366,15 +356,15 @@ void HttpClientTransport::sse_loop() {
             std::lock_guard<std::mutex> lock(state_mutex_);
             delay = retry_ms_;
         }
-        (void)detail::poll_readable(wake_pipe_[0], -1, delay);
+        (void)pal::poll_readable(wake_->poll_handle(), nullptr, delay);
     }
 }
 
 bool HttpClientTransport::run_sse_once() {
     std::string error;
-    const int fd = detail::connect_tcp(options_.host, options_.port,
-                                       options_.connect_timeout_ms, error);
-    if (fd < 0) {
+    pal::fd_t fd = pal::tcp_connect(options_.host, options_.port,
+                                    options_.connect_timeout_ms, error);
+    if (fd == pal::kInvalidFd) {
         return false;
     }
 
@@ -402,8 +392,8 @@ bool HttpClientTransport::run_sse_once() {
     }
     const auto request =
         detail::serialize_request("GET", options_.path, headers, "");
-    if (!detail::write_all(fd, request.data(), request.size())) {
-        ::close(fd);
+    if (!pal::write_all(fd, request.data(), request.size())) {
+        pal::close_fd(fd);
         return false;
     }
 
@@ -413,28 +403,28 @@ bool HttpClientTransport::run_sse_once() {
     std::string parse_error;
     bool have_head = false;
     while (!have_head) {
-        if (detail::poll_readable(fd, wake_pipe_[0], 30000) != 1 ||
+        if (pal::poll_readable(fd, wake_.get(), 30000) != 1 ||
             !running_.load()) {
-            ::close(fd);
+            pal::close_fd(fd);
             return false;
         }
         char chunk[8192];
-        const long n = detail::read_some(fd, chunk, sizeof(chunk));
+        const long n = pal::read_some(fd, chunk, sizeof(chunk));
         if (n <= 0) {
-            ::close(fd);
+            pal::close_fd(fd);
             return false;
         }
         buffer.append(chunk, static_cast<std::size_t>(n));
         have_head = detail::parse_head(buffer, /*request_mode=*/false, head,
                                        consumed, parse_error);
         if (!have_head && !parse_error.empty()) {
-            ::close(fd);
+            pal::close_fd(fd);
             return false;
         }
     }
     if (head.status != 200 ||
         !head.header_contains("content-type", "text/event-stream")) {
-        ::close(fd);
+        pal::close_fd(fd);
         return false;
     }
     buffer.erase(0, consumed);
@@ -457,18 +447,18 @@ bool HttpClientTransport::run_sse_once() {
             delivered = true;
         }
         events.clear();
-        if (detail::poll_readable(fd, wake_pipe_[0], -1) != 1 ||
+        if (pal::poll_readable(fd, wake_.get(), -1) != 1 ||
             !running_.load()) {
             break;  // disconnect requested
         }
         char chunk[8192];
-        const long n = detail::read_some(fd, chunk, sizeof(chunk));
+        const long n = pal::read_some(fd, chunk, sizeof(chunk));
         if (n <= 0) {
             break;  // server closed; caller reconnects (FR-TRAN-007)
         }
         parser.feed(chunk, static_cast<std::size_t>(n), events);
     }
-    ::close(fd);
+    pal::close_fd(fd);
     return delivered;
 }
 

@@ -1,17 +1,9 @@
 #include "http_endpoint.hpp"
 
 #include <algorithm>
-#include <csignal>
 #include <cstdlib>
-#include <cstring>
-
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include <mcp/types.hpp>
-
-#include "../line_io.hpp"
-#include "socket_util.hpp"
 
 namespace mcp::detail {
 
@@ -35,21 +27,20 @@ bool HttpEndpoint::start(std::string& error) {
     if (running_.exchange(true)) {
         return true;
     }
-    ::signal(SIGPIPE, SIG_IGN);  // Dead peers surface as write errors.
+    pal::ignore_broken_pipe_signals();  // Dead peers surface as write errors.
 
-    listen_fd_ = listen_tcp(options_.host, options_.port, error);
-    if (listen_fd_ < 0) {
+    listen_fd_ = pal::tcp_listen(options_.host, options_.port, error);
+    if (listen_fd_ == pal::kInvalidFd) {
         running_.store(false);
         return false;
     }
-    if (::pipe(wake_pipe_) != 0) {
-        ::close(listen_fd_);
-        listen_fd_ = -1;
+    if (!wake_.valid()) {
+        pal::close_fd(listen_fd_);
         running_.store(false);
-        error = "failed to create wake pipe";
+        error = "failed to create wake event";
         return false;
     }
-    bound_port_.store(local_port(listen_fd_));
+    bound_port_.store(pal::tcp_local_port(listen_fd_));
     accept_thread_ = std::thread([this] { accept_loop(); });
     return true;
 }
@@ -58,17 +49,12 @@ void HttpEndpoint::stop() {
     if (!running_.exchange(false)) {
         return;
     }
-    if (wake_pipe_[1] >= 0) {
-        const char byte = 0;
-        (void)write_all(wake_pipe_[1], &byte, 1);
-    }
-    if (listen_fd_ >= 0) {
-        ::shutdown(listen_fd_, SHUT_RDWR);
-    }
+    wake_.signal();
+    pal::shutdown_fd(listen_fd_);
     {
         std::lock_guard<std::mutex> lock(conn_mutex_);
-        for (const int fd : conn_fds_) {
-            ::shutdown(fd, SHUT_RDWR);
+        for (const pal::fd_t fd : conn_fds_) {
+            pal::shutdown_fd(fd);
         }
     }
     if (accept_thread_.joinable()) {
@@ -86,36 +72,28 @@ void HttpEndpoint::stop() {
     }
     {
         std::lock_guard<std::mutex> lock(conn_mutex_);
-        for (const int fd : conn_fds_) {
-            ::close(fd);
+        for (pal::fd_t fd : conn_fds_) {
+            pal::close_fd(fd);
         }
         conn_fds_.clear();
     }
-    if (listen_fd_ >= 0) {
-        ::close(listen_fd_);
-        listen_fd_ = -1;
-    }
-    for (int* fd : {&wake_pipe_[0], &wake_pipe_[1]}) {
-        if (*fd >= 0) {
-            ::close(*fd);
-            *fd = -1;
-        }
-    }
+    pal::close_fd(listen_fd_);
 }
 
 void HttpEndpoint::accept_loop() {
     while (running_.load()) {
-        const int ready = poll_readable(listen_fd_, wake_pipe_[0], -1);
+        const int ready = pal::poll_readable(listen_fd_, &wake_, -1);
         if (ready <= 0 || !running_.load()) {
             return;
         }
-        const int fd = ::accept(listen_fd_, nullptr, nullptr);
-        if (fd < 0) {
+        const pal::fd_t fd = pal::tcp_accept(listen_fd_);
+        if (fd == pal::kInvalidFd) {
             continue;
         }
         std::lock_guard<std::mutex> lock(conn_mutex_);
         if (!running_.load()) {
-            ::close(fd);
+            pal::fd_t doomed = fd;
+            pal::close_fd(doomed);
             return;
         }
         conn_fds_.push_back(fd);
@@ -147,7 +125,7 @@ void HttpEndpoint::write_simple(int fd, int status, const std::string& reason,
         headers.push_back(header);
     }
     const auto payload = serialize_response(status, reason, headers, body);
-    (void)write_all(fd, payload.data(), payload.size());
+    (void)pal::write_all(fd, payload.data(), payload.size());
 }
 
 void HttpEndpoint::handle_connection(int fd) {
@@ -170,12 +148,12 @@ void HttpEndpoint::handle_connection(int fd) {
                 write_simple(fd, 400, "Bad Request", "malformed HTTP request");
                 break;
             }
-            if (poll_readable(fd, wake_pipe_[0], 30000) != 1 ||
+            if (pal::poll_readable(fd, &wake_, 30000) != 1 ||
                 !running_.load()) {
                 break;  // shutdown or idle timeout
             }
             char chunk[8192];
-            const long n = read_some(fd, chunk, sizeof(chunk));
+            const long n = pal::read_some(fd, chunk, sizeof(chunk));
             if (n <= 0) {
                 break;
             }
@@ -205,13 +183,13 @@ void HttpEndpoint::handle_connection(int fd) {
         std::string body = buffer.substr(consumed);
         bool truncated = false;
         while (body.size() < length) {
-            if (poll_readable(fd, wake_pipe_[0], 30000) != 1 ||
+            if (pal::poll_readable(fd, &wake_, 30000) != 1 ||
                 !running_.load()) {
                 truncated = true;
                 break;
             }
             char chunk[8192];
-            const long n = read_some(fd, chunk, sizeof(chunk));
+            const long n = pal::read_some(fd, chunk, sizeof(chunk));
             if (n <= 0) {
                 truncated = true;
                 break;
@@ -227,12 +205,13 @@ void HttpEndpoint::handle_connection(int fd) {
 
     // Close eagerly so dropped SSE clients see EOF and can reconnect
     // (FR-TRAN-007); stop() only owns fds still in the list.
-    ::shutdown(fd, SHUT_RDWR);
+    pal::shutdown_fd(fd);
     std::lock_guard<std::mutex> lock(conn_mutex_);
     const auto it = std::find(conn_fds_.begin(), conn_fds_.end(), fd);
     if (it != conn_fds_.end()) {
         conn_fds_.erase(it);
-        ::close(fd);
+        pal::fd_t doomed = fd;
+        pal::close_fd(doomed);
     }
 }
 
