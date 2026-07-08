@@ -195,7 +195,7 @@ bool frame_contains_initialize(const ParsedFrame& frame) {
     return false;
 }
 
-void write_jsonrpc_error(int fd, int status, const std::string& reason,
+void write_jsonrpc_error(std::intptr_t fd, int status, const std::string& reason,
                          const Error& error) {
     JsonRpcResponse response;
     response.error = error;
@@ -234,7 +234,7 @@ bool HttpSessionServer::start(std::string& error) {
     }
     endpoint_ = std::make_unique<detail::HttpEndpoint>(
         options_.http,
-        [this](const detail::HttpHead& head, const std::string& body, int fd) {
+        [this](const detail::HttpHead& head, const std::string& body, std::intptr_t fd) {
             handle_request(head, body, fd);
         });
     if (!endpoint_->start(error)) {
@@ -265,7 +265,7 @@ void HttpSessionServer::stop() {
 }
 
 void HttpSessionServer::handle_request(const detail::HttpHead& head,
-                                       const std::string& body, int fd) {
+                                       const std::string& body, std::intptr_t fd) {
     // Lazy idle sweep on request traffic.
     for (auto& evicted : registry_->remove_idle(options_.session_idle_timeout)) {
         evicted->transport->disconnect();

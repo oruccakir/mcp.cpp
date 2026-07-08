@@ -114,7 +114,7 @@ bool HttpEndpoint::origin_allowed(const HttpHead& head) const {
     return false;
 }
 
-void HttpEndpoint::write_simple(int fd, int status, const std::string& reason,
+void HttpEndpoint::write_simple(std::intptr_t fd, int status, const std::string& reason,
                                 const std::string& body,
                                 const std::string& content_type,
                                 const HeaderList& extra_headers) {
@@ -128,7 +128,7 @@ void HttpEndpoint::write_simple(int fd, int status, const std::string& reason,
     (void)pal::write_all(fd, payload.data(), payload.size());
 }
 
-void HttpEndpoint::handle_connection(int fd) {
+void HttpEndpoint::handle_connection(std::intptr_t fd) {
     // One request per connection (Connection: close semantics).
     do {
         std::string buffer;

@@ -29,7 +29,7 @@ public:
     /// `last_event_id` (wire header value; empty = first never-delivered),
     /// then streams until takeover, shutdown, or write failure. The caller
     /// owns/closes the fd afterwards.
-    void attach_stream(int fd, const std::string& last_event_id,
+    void attach_stream(std::intptr_t fd, const std::string& last_event_id,
                        const std::string& protocol_version_header);
 
     /// Wakes and detaches any active stream; enqueue becomes a no-op.

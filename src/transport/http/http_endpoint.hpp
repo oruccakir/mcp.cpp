@@ -25,7 +25,7 @@ public:
     /// been read and passed the path/Origin/authorize checks. The handler
     /// must write a complete response to `fd`; the endpoint closes it after.
     using RequestHandler = std::function<void(const HttpHead& head,
-                                              const std::string& body, int fd)>;
+                                              const std::string& body, std::intptr_t fd)>;
 
     HttpEndpoint(HttpServerOptions options, RequestHandler handler);
     ~HttpEndpoint();
@@ -41,14 +41,14 @@ public:
     const pal::WakeEvent& wake() const { return wake_; }
 
     /// Writes a complete plain response (adds MCP-Protocol-Version).
-    static void write_simple(int fd, int status, const std::string& reason,
+    static void write_simple(std::intptr_t fd, int status, const std::string& reason,
                              const std::string& body = "",
                              const std::string& content_type = "text/plain",
                              const HeaderList& extra_headers = {});
 
 private:
     void accept_loop();
-    void handle_connection(int fd);
+    void handle_connection(std::intptr_t fd);
     bool origin_allowed(const HttpHead& head) const;
 
     HttpServerOptions options_;

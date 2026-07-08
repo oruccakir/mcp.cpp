@@ -48,7 +48,7 @@ void HttpServerTransport::connect() {
         options_.replay_buffer_size, options_.sse_retry_ms);
     endpoint_ = std::make_unique<detail::HttpEndpoint>(
         options_, [this](const detail::HttpHead& head, const std::string& body,
-                         int fd) { handle_request(head, body, fd); });
+                         std::intptr_t fd) { handle_request(head, body, fd); });
     std::string error;
     if (!endpoint_->start(error)) {
         endpoint_.reset();
@@ -77,7 +77,7 @@ void HttpServerTransport::disconnect() {
 }
 
 void HttpServerTransport::handle_request(const detail::HttpHead& head,
-                                         const std::string& body, int fd) {
+                                         const std::string& body, std::intptr_t fd) {
     if (head.method == "GET") {
         if (!head.header_contains("accept", "text/event-stream")) {
             detail::HttpEndpoint::write_simple(fd, 406, "Not Acceptable",
