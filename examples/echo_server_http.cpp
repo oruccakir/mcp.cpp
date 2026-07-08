@@ -10,9 +10,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <future>
 #include <memory>
-
-#include <unistd.h>
 
 #include <mcp/mcp.hpp>
 
@@ -56,7 +55,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "listening on %u\n", http.port());
     std::fflush(stderr);
 
-    for (;;) {
-        ::pause();  // serve until killed
-    }
+    // Serve until killed.
+    std::promise<void>().get_future().wait();
+    return 0;
 }

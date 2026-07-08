@@ -5,7 +5,11 @@
 #include <mutex>
 #include <vector>
 
+#if defined(_WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <mcp/transport/stdio_transport.hpp>
 
@@ -55,10 +59,30 @@ struct Sink {
 
 struct Pipe {
     int fds[2] = {-1, -1};
+#if defined(_WIN32)
+    Pipe() { EXPECT_EQ(::_pipe(fds, 4096, 0), 0); }
+#else
     Pipe() { EXPECT_EQ(::pipe(fds), 0); }
+#endif
     int read_fd() const { return fds[0]; }
     int write_fd() const { return fds[1]; }
 };
+
+// CRT-portable raw fd helpers for injecting bytes past the transport.
+long fd_write(int fd, const void* data, std::size_t size) {
+#if defined(_WIN32)
+    return ::_write(fd, data, static_cast<unsigned>(size));
+#else
+    return static_cast<long>(::write(fd, data, size));
+#endif
+}
+void fd_close(int fd) {
+#if defined(_WIN32)
+    ::_close(fd);
+#else
+    ::close(fd);
+#endif
+}
 
 TEST(StdioTransport, SendReceiveAcrossPipes) {
     Pipe a_to_b;
@@ -132,16 +156,16 @@ TEST(StdioTransport, GarbageLineSurfacesParseError) {
     t.connect();
 
     const char garbage[] = "this is not json\n";
-    ASSERT_EQ(::write(input.write_fd(), garbage, sizeof(garbage) - 1),
-              static_cast<ssize_t>(sizeof(garbage) - 1));
+    ASSERT_EQ(fd_write(input.write_fd(), garbage, sizeof(garbage) - 1),
+              static_cast<long>(sizeof(garbage) - 1));
 
     ASSERT_TRUE(sink.wait_for([&] { return sink.errors.size() == 1; }));
     EXPECT_EQ(sink.errors[0].code, static_cast<int>(ErrorCode::ParseError));
 
     // Closing the peer's write end delivers EOF -> close event.
-    ::close(input.write_fd());
+    fd_close(input.write_fd());
     ASSERT_TRUE(sink.wait_for([&] { return sink.closed; }));
-    ::close(output.read_fd());
+    fd_close(output.read_fd());
 }
 
 TEST(StdioTransport, MultipleMessagesInOneWrite) {
@@ -155,12 +179,12 @@ TEST(StdioTransport, MultipleMessagesInOneWrite) {
     const std::string two =
         R"({"jsonrpc":"2.0","id":1,"method":"ping"})" "\n"
         R"({"jsonrpc":"2.0","method":"notifications/initialized"})" "\n";
-    ASSERT_EQ(::write(input.write_fd(), two.data(), two.size()),
-              static_cast<ssize_t>(two.size()));
+    ASSERT_EQ(fd_write(input.write_fd(), two.data(), two.size()),
+              static_cast<long>(two.size()));
 
     ASSERT_TRUE(sink.wait_for([&] { return sink.messages.size() == 2; }));
-    ::close(input.write_fd());
-    ::close(output.read_fd());
+    fd_close(input.write_fd());
+    fd_close(output.read_fd());
 }
 
 TEST(StdioTransport, DisconnectUnblocksIdleReader) {
@@ -177,8 +201,8 @@ TEST(StdioTransport, DisconnectUnblocksIdleReader) {
     const auto elapsed = std::chrono::steady_clock::now() - start;
     EXPECT_LT(elapsed, std::chrono::seconds(1));
 
-    ::close(input.write_fd());
-    ::close(output.read_fd());
+    fd_close(input.write_fd());
+    fd_close(output.read_fd());
 }
 
 }  // namespace

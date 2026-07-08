@@ -122,4 +122,10 @@ void terminate(Process& process, bool force) {
     }
 }
 
+bool exited_normally(int status) { return WIFEXITED(status); }
+
+int exit_code(int status) {
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
 }  // namespace mcp::pal

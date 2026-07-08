@@ -20,9 +20,15 @@
 
 namespace mcp::pal {
 
-/// Descriptor type for sockets and pipes. POSIX: plain fd. This alias is the
-/// only platform-conditional type in the SDK.
+/// Descriptor type for sockets and pipes. POSIX: plain fd. Windows: holds
+/// either a SOCKET or a CRT file descriptor (pipes/stdio); the backend
+/// disambiguates. This alias is the only platform-conditional type in the
+/// SDK.
+#if defined(_WIN32)
+using fd_t = std::intptr_t;
+#else
 using fd_t = int;
+#endif
 inline constexpr fd_t kInvalidFd = -1;
 
 // --- Generic descriptor I/O -----------------------------------------------
@@ -99,6 +105,8 @@ struct ProcessSpec {
 
 struct Process {
     std::int64_t pid = -1;
+    /// Backend-owned handle (win32: process HANDLE; unused on POSIX).
+    std::intptr_t native_handle = 0;
     fd_t stdin_fd = kInvalidFd;
     fd_t stdout_fd = kInvalidFd;
     fd_t stderr_fd = kInvalidFd;
@@ -108,10 +116,16 @@ struct Process {
 bool spawn(const ProcessSpec& spec, Process& out, std::string& error);
 
 /// Waits up to timeout_ms for exit; true when exited (`status` = raw
-/// platform status, POSIX waitpid semantics). False on timeout.
+/// platform status: waitpid semantics on POSIX, exit code on win32 — use
+/// the helpers below to interpret it portably). False on timeout.
 bool wait_exit(Process& process, int timeout_ms, int& status);
 
-/// Asks the child to stop (POSIX: SIGTERM), or forces it (SIGKILL).
+/// Asks the child to stop, or forces it. POSIX: SIGTERM / SIGKILL. Windows
+/// has no graceful-termination signal: both map to TerminateProcess.
 void terminate(Process& process, bool force);
+
+/// Portable interpretation of a `wait_exit` status.
+bool exited_normally(int status);
+int exit_code(int status);
 
 }  // namespace mcp::pal
