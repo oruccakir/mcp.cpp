@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <future>
+#include <vector>
 
 #include <mcp/methods.hpp>
 
@@ -99,7 +100,10 @@ ServerOptions Server::server_options() const {
 void Server::attach(ServerSession& session) {
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
-        active_session_ = &session;
+        if (std::find(sessions_.begin(), sessions_.end(), &session) ==
+            sessions_.end()) {
+            sessions_.push_back(&session);
+        }
     }
     auto& router = session.router();
 
@@ -263,6 +267,13 @@ void Server::attach(ServerSession& session) {
     });
 }
 
+void Server::detach(ServerSession& session) {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    sessions_.erase(
+        std::remove(sessions_.begin(), sessions_.end(), &session),
+        sessions_.end());
+}
+
 int Server::run(std::shared_ptr<Transport> transport) {
     ServerSession session(std::move(transport), server_options());
     attach(session);
@@ -272,16 +283,18 @@ int Server::run(std::shared_ptr<Transport> transport) {
     session.connect();
     closed.get_future().wait();
 
-    {
-        std::lock_guard<std::mutex> lock(session_mutex_);
-        active_session_ = nullptr;
-    }
+    detach(session);
     return 0;
 }
 
 ServerSession* Server::session() {
     std::lock_guard<std::mutex> lock(session_mutex_);
-    return active_session_;
+    return sessions_.size() == 1 ? sessions_.front() : nullptr;
+}
+
+std::vector<ServerSession*> Server::sessions() {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    return sessions_;
 }
 
 void Server::notify_resource_updated(const std::string& uri) {
@@ -293,10 +306,12 @@ void Server::notify_resource_updated(const std::string& uri) {
 
 void Server::send_notification_if_operating(const std::string& method,
                                             std::optional<json> params) {
+    // Broadcast to every attached Operating session (multi-session HTTP).
     std::lock_guard<std::mutex> lock(session_mutex_);
-    if (active_session_ != nullptr &&
-        active_session_->state() == SessionState::Operating) {
-        active_session_->send_notification(method, std::move(params));
+    for (ServerSession* session : sessions_) {
+        if (session->state() == SessionState::Operating) {
+            session->send_notification(method, params);
+        }
     }
 }
 

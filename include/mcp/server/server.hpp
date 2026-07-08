@@ -50,9 +50,13 @@ public:
     ServerOptions server_options() const;
 
     /// Registers all feature handlers on the session's router and binds the
-    /// logger and list_changed notifications to it. The session must outlive
-    /// the server's use of it (run() manages this automatically).
+    /// logger and list_changed notifications. Multiple sessions may be
+    /// attached concurrently (multi-session HTTP serving): notifications and
+    /// log messages broadcast to every attached Operating session. Call
+    /// detach() before destroying a session that outlives the others
+    /// (run() and HttpSessionServer manage this automatically).
     void attach(ServerSession& session);
+    void detach(ServerSession& session);
 
     /// Blocks serving the transport until the connection closes.
     /// Returns 0 on clean shutdown.
@@ -62,12 +66,14 @@ public:
     /// (FR-SRV-012).
     void notify_resource_updated(const std::string& uri);
 
-    /// The currently attached session (nullptr when not attached/serving).
-    /// Used to initiate server->client requests (sampling, roots,
-    /// elicitation). Do not block a request handler on a round-trip to the
-    /// client: dispatch is synchronous, so waiting inside a handler starves
-    /// the read loop — do such work on a separate thread.
+    /// The attached session when exactly one is attached (nullptr when none
+    /// or several). Used to initiate server->client requests (sampling,
+    /// roots, elicitation). Do not block a request handler on a round-trip
+    /// to the client: dispatch is synchronous, so waiting inside a handler
+    /// starves the read loop — do such work on a separate thread.
     ServerSession* session();
+    /// All currently attached sessions (multi-session serving).
+    std::vector<ServerSession*> sessions();
 
 private:
     void send_notification_if_operating(const std::string& method,
@@ -82,7 +88,7 @@ private:
     Logger logger_;
 
     std::mutex session_mutex_;
-    ServerSession* active_session_ = nullptr;
+    std::vector<ServerSession*> sessions_;
 };
 
 }  // namespace mcp
