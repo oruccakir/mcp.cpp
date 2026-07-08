@@ -19,6 +19,9 @@ option(MCP_BUILD_TESTS "Build the mcp.cpp test suite" ${MCP_IS_TOP_LEVEL})
 option(MCP_BUILD_EXAMPLES "Build the mcp.cpp example servers" ${MCP_IS_TOP_LEVEL})
 option(MCP_USE_EXCEPTIONS "Enable exception-based error reporting" ON)
 option(MCP_WERROR "Treat compiler warnings as errors" OFF)
+option(MCP_ENABLE_LOGGING
+    "Compile in MCP_LOG diagnostic logging (stderr; runtime level via MCP_LOG env)"
+    OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(warnings)

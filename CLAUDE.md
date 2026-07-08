@@ -46,7 +46,7 @@ ctest --test-dir build --output-on-failure          # all tests
 ctest --test-dir build -R 'ServerSession.Handshake' # single test (regex on Suite.Name)
 ```
 
-Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON at top level), `MCP_USE_EXCEPTIONS` (ON; the OFF path is Phase 5), `MCP_WERROR` (OFF locally, ON in CI). Further options planned per FR-BUILD-002: `MCP_BUILD_SERVER`, `MCP_BUILD_CLIENT`, `MCP_USE_ASIO`, `MCP_USE_SIMDJSON`, `MCP_EMBEDDED_PROFILE`.
+Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON at top level), `MCP_USE_EXCEPTIONS` (ON; the OFF path is Phase 5), `MCP_WERROR` (OFF locally, ON in CI), `MCP_ENABLE_LOGGING` (OFF; compiles in the `MCP_LOG` stderr diagnostics — see include/mcp/log.hpp; runtime level via the `MCP_LOG` env var; distinct from the protocol-level `mcp::Logger`. When adding MCP_LOG lines, anything referenced *only* inside them must not trigger unused warnings in OFF builds). Further options planned per FR-BUILD-002: `MCP_BUILD_SERVER`, `MCP_BUILD_CLIENT`, `MCP_USE_ASIO`, `MCP_USE_SIMDJSON`, `MCP_EMBEDDED_PROFILE`.
 
 Library targets: `mcp::core` (engine, sessions, content, schema), `mcp::transport` (stdio + Streamable HTTP), `mcp::server` (tools/resources/prompts/logging/completions + `mcp::Server` facade), `mcp::client` (sampling/roots/elicitation + `mcp::Client` facade; links mcp-server for the shared feature types). Example servers live in examples/ (echo, calculator, echo_server_http).
 

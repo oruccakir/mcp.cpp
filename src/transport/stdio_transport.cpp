@@ -1,4 +1,8 @@
+#define MCP_LOG_COMPONENT "stdio"
+
 #include <mcp/transport/stdio_transport.hpp>
+
+#include <mcp/log.hpp>
 
 #include "../platform/pal.hpp"
 
@@ -29,6 +33,8 @@ void StdioTransport::connect() {
         emit_error(Error(ErrorCode::InternalError, "failed to create wake event"));
         return;
     }
+    MCP_LOG(info, "stdio transport connected (in fd " << in_fd_ << ", out fd "
+                                                      << out_fd_ << ")");
     read_thread_ = std::thread([this] { read_loop(); });
 }
 
@@ -83,6 +89,7 @@ void StdioTransport::read_loop() {
             break;
         }
         if (n == 0) {
+            MCP_LOG(info, "stdin EOF; closing transport");
             break;  // EOF: peer closed
         }
 

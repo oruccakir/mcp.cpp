@@ -1,4 +1,8 @@
+#define MCP_LOG_COMPONENT "stdio"
+
 #include <mcp/transport/stdio_client_transport.hpp>
+
+#include <mcp/log.hpp>
 
 #include "../platform/pal.hpp"
 #include "line_io.hpp"
@@ -43,6 +47,8 @@ void StdioClientTransport::connect() {
         emit_error(Error(ErrorCode::InternalError, "spawn failed: " + error));
         return;
     }
+    MCP_LOG(info, "spawned: " << parameters_.command << " (pid " << process.pid
+                              << ")");
     child_pid_.store(process.pid);
     child_handle_.store(process.native_handle);
     // Pipe descriptors are CRT fds on every backend: they fit in int.
@@ -121,14 +127,17 @@ void StdioClientTransport::disconnect() {
         int status = -1;
         bool exited = pal::wait_exit(process, grace, status);
         if (!exited) {
+            MCP_LOG(warn, "child unresponsive after stdin close; terminating");
             pal::terminate(process, /*force=*/false);
             exited = pal::wait_exit(process, grace, status);
         }
         if (!exited) {
+            MCP_LOG(warn, "child still running; forcing termination");
             pal::terminate(process, /*force=*/true);
             exited = pal::wait_exit(process, grace, status);
         }
         if (exited) {
+            MCP_LOG(info, "child exited (raw status " << status << ")");
             exit_status_.store(status);
             exited_.store(true);
         }

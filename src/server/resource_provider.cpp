@@ -1,9 +1,12 @@
+#define MCP_LOG_COMPONENT "registry"
+
 #include <mcp/server/resource_provider.hpp>
 
 #include <algorithm>
 #include <cctype>
 
 #include <mcp/detail/uri_template.hpp>
+#include <mcp/log.hpp>
 
 namespace mcp {
 
@@ -93,6 +96,9 @@ Result<void> ResourceProvider::add_resource(Resource resource,
         }
         resources_.emplace_back(std::move(resource), std::move(handler));
         changed = changed_callback_;
+        MCP_LOG(info, "resource registered: " << resources_.back().first.uri
+                                              << " (" << resources_.size()
+                                              << " total)");
     }
     if (changed) {
         changed();
@@ -112,6 +118,9 @@ Result<void> ResourceProvider::add_resource_template(ResourceTemplate tmpl) {
         }
         templates_.push_back(std::move(tmpl));
         changed = changed_callback_;
+        MCP_LOG(info, "resource template registered: "
+                          << templates_.back().uri_template << " ("
+                          << templates_.size() << " total)");
     }
     if (changed) {
         changed();

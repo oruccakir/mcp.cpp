@@ -1,3 +1,5 @@
+#define MCP_LOG_COMPONENT "http"
+
 #include <mcp/transport/http_session_server.hpp>
 
 #include <atomic>
@@ -7,6 +9,7 @@
 #include <random>
 #include <vector>
 
+#include <mcp/log.hpp>
 #include <mcp/methods.hpp>
 #include <mcp/types.hpp>
 
@@ -184,6 +187,11 @@ namespace {
 
 constexpr const char* kSessionHeader = "mcp-session-id";
 
+/// Session ids are secrets: log only a prefix.
+[[maybe_unused]] std::string id_prefix(const std::string& id) {
+    return id.size() > 8 ? id.substr(0, 8) + "..." : id;
+}
+
 bool frame_contains_initialize(const ParsedFrame& frame) {
     for (const auto& message : frame.messages) {
         if (const auto* request = std::get_if<JsonRpcRequest>(&message)) {
@@ -268,6 +276,7 @@ void HttpSessionServer::handle_request(const detail::HttpHead& head,
                                        const std::string& body, std::intptr_t fd) {
     // Lazy idle sweep on request traffic.
     for (auto& evicted : registry_->remove_idle(options_.session_idle_timeout)) {
+        MCP_LOG(info, "session expired (idle)");
         evicted->transport->disconnect();
         if (on_session_closed_ && evicted->session) {
             on_session_closed_(*evicted->session);
@@ -297,6 +306,10 @@ void HttpSessionServer::handle_request(const detail::HttpHead& head,
         if (on_session_closed_ && entry->session) {
             on_session_closed_(*entry->session);
         }
+        MCP_LOG(info, "session terminated by client: " << id_prefix(session_id)
+                                                       << " ("
+                                                       << registry_->size()
+                                                       << " active)");
         detail::HttpEndpoint::write_simple(fd, 200, "OK");
         return;
     }
@@ -320,6 +333,12 @@ void HttpSessionServer::handle_request(const detail::HttpHead& head,
         }
         // Blocks for the stream's lifetime; per-session replay space
         // (FR-TRAN-007/009).
+        MCP_LOG(debug, "SSE stream attach: session "
+                           << id_prefix(session_id)
+                           << (head.header("last-event-id").empty()
+                                   ? ""
+                                   : ", resume after event " +
+                                         head.header("last-event-id")));
         entry->transport->channel().attach_stream(
             fd, head.header("last-event-id"), kProtocolVersion);
         return;
@@ -362,6 +381,8 @@ void HttpSessionServer::handle_request(const detail::HttpHead& head,
         new_entry->last_activity = std::chrono::steady_clock::now();
         const std::string id = detail::generate_session_id();
         entry = registry_->create(id, new_entry);
+        MCP_LOG(info, "session created: " << id_prefix(id) << " ("
+                                          << registry_->size() << " active)");
         extra_headers.emplace_back("Mcp-Session-Id", id);
     } else {
         entry = registry_->find(session_id);

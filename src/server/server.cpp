@@ -1,9 +1,12 @@
+#define MCP_LOG_COMPONENT "server"
+
 #include <mcp/server/server.hpp>
 
 #include <algorithm>
 #include <future>
 #include <vector>
 
+#include <mcp/log.hpp>
 #include <mcp/methods.hpp>
 
 namespace mcp {
@@ -98,6 +101,15 @@ ServerOptions Server::server_options() const {
 }
 
 void Server::attach(ServerSession& session) {
+    MCP_LOG(info, "serving \"" << info_.name << "\" v" << info_.version << ": "
+                               << tools_.size() << " tools, "
+                               << resources_.resource_count() << " resources, "
+                               << resources_.template_count() << " templates, "
+                               << prompts_.size() << " prompts"
+                               << (prompts_.has_completions() ||
+                                           resources_.has_completions()
+                                       ? ", completions"
+                                       : ""));
     {
         std::lock_guard<std::mutex> lock(session_mutex_);
         if (std::find(sessions_.begin(), sessions_.end(), &session) ==
