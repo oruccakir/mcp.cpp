@@ -66,10 +66,22 @@ That's a complete MCP server: capabilities are derived automatically from what y
 
 Requirements: CMake ≥ 3.20, a C++17 compiler (GCC/Clang tested in CI). nlohmann/json and GoogleTest are found on the system or fetched automatically.
 
+With CMake presets (≥3.21 — recommended):
+
+```bash
+cmake --preset dev            # Debug + tests + examples + MCP_LOG diagnostics
+cmake --build --preset dev -j
+ctest --preset dev            # 140+ tests
+```
+
+Presets: `dev`, `debug`, `release`, `ci` (warnings-as-errors). Machine-local overrides go in `CMakeUserPresets.json` (gitignored — inherit from any shared preset there).
+
+Classic invocation works too:
+
 ```bash
 cmake -B build -DMCP_BUILD_TESTS=ON -DMCP_BUILD_EXAMPLES=ON
 cmake --build build -j
-ctest --test-dir build --output-on-failure    # 140+ tests
+ctest --test-dir build --output-on-failure
 ```
 
 CMake targets to link against: `mcp::core`, `mcp::transport`, `mcp::server`, `mcp::client`.

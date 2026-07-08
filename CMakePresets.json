@@ -1,0 +1,67 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {"major": 3, "minor": 21, "patch": 0},
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "MCP_BUILD_TESTS": "ON",
+                "MCP_BUILD_EXAMPLES": "ON"
+            }
+        },
+        {
+            "name": "dev",
+            "displayName": "Dev (Debug + MCP_LOG diagnostics)",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "MCP_ENABLE_LOGGING": "ON"
+            }
+        },
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "inherits": "base",
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "inherits": "base",
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+        },
+        {
+            "name": "ci",
+            "displayName": "CI (warnings as errors)",
+            "inherits": "base",
+            "cacheVariables": {"MCP_WERROR": "ON"}
+        }
+    ],
+    "buildPresets": [
+        {"name": "dev", "configurePreset": "dev", "configuration": "Debug"},
+        {"name": "debug", "configurePreset": "debug", "configuration": "Debug"},
+        {"name": "release", "configurePreset": "release", "configuration": "Release"}
+    ],
+    "testPresets": [
+        {
+            "name": "dev",
+            "configurePreset": "dev",
+            "configuration": "Debug",
+            "output": {"outputOnFailure": true}
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "configuration": "Debug",
+            "output": {"outputOnFailure": true}
+        },
+        {
+            "name": "release",
+            "configurePreset": "release",
+            "configuration": "Release",
+            "output": {"outputOnFailure": true}
+        }
+    ]
+}

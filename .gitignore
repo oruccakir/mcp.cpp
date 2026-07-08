@@ -4,6 +4,9 @@ build-*/
 cmake-build-*/
 out/
 
+# Per-user CMake presets (machine-local overrides; CMakePresets.json is shared)
+CMakeUserPresets.json
+
 # CMake artifacts (in-source configure accidents)
 CMakeCache.txt
 CMakeFiles/

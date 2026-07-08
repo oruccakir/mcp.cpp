@@ -40,11 +40,14 @@ Umbrella target: `mcp::all`. Error codes: standard JSON-RPC (-32700…-32603) pl
 ## Build & Test
 
 ```bash
-cmake -B build -DMCP_BUILD_TESTS=ON   # configure (fetches nlohmann/json if not system-installed)
-cmake --build build -j                # build
-ctest --test-dir build --output-on-failure          # all tests
-ctest --test-dir build -R 'ServerSession.Handshake' # single test (regex on Suite.Name)
+cmake --preset dev && cmake --build --preset dev -j && ctest --preset dev   # preferred (build/dev/)
+ctest --preset dev -R 'ServerSession.Handshake'     # single test (regex on Suite.Name)
+
+cmake -B build -DMCP_BUILD_TESTS=ON   # classic flow still works (fetches nlohmann/json if needed)
+cmake --build build -j && ctest --test-dir build --output-on-failure
 ```
+
+Presets (CMakePresets.json, schema v3/CMake ≥3.21): `dev` (Debug+logging), `debug`, `release`, `ci` (Werror). Per-user overrides belong in `CMakeUserPresets.json` (gitignored).
 
 Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON at top level), `MCP_USE_EXCEPTIONS` (ON; the OFF path is Phase 5), `MCP_WERROR` (OFF locally, ON in CI), `MCP_ENABLE_LOGGING` (OFF; compiles in the `MCP_LOG` stderr diagnostics — see include/mcp/log.hpp; runtime level via the `MCP_LOG` env var; distinct from the protocol-level `mcp::Logger`. When adding MCP_LOG lines, anything referenced *only* inside them must not trigger unused warnings in OFF builds). Further options planned per FR-BUILD-002: `MCP_BUILD_SERVER`, `MCP_BUILD_CLIENT`, `MCP_USE_ASIO`, `MCP_USE_SIMDJSON`, `MCP_EMBEDDED_PROFILE`.
 
