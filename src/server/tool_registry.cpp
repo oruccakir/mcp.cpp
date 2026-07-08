@@ -1,8 +1,11 @@
+#define MCP_LOG_COMPONENT "registry"
+
 #include <mcp/server/tool_registry.hpp>
 
 #include <algorithm>
 
 #include <mcp/detail/schema.hpp>
+#include <mcp/log.hpp>
 
 namespace mcp {
 
@@ -63,6 +66,9 @@ Result<void> ToolRegistry::register_tool(Tool tool, ToolHandler handler) {
         }
         tools_.emplace_back(std::move(tool), std::move(handler));
         changed = changed_callback_;
+        MCP_LOG(info, "tool registered: \"" << tools_.back().first.name
+                                            << "\" (" << tools_.size()
+                                            << " total)");
     }
     if (changed) {
         changed();
@@ -83,6 +89,7 @@ bool ToolRegistry::remove_tool(const std::string& name) {
         tools_.erase(it);
         changed = changed_callback_;
     }
+    MCP_LOG(info, "tool removed: \"" << name << "\"");
     if (changed) {
         changed();
     }

@@ -1,8 +1,11 @@
+#define MCP_LOG_COMPONENT "session"
+
 #include <mcp/core/session.hpp>
 
 #include <algorithm>
 #include <future>
 
+#include <mcp/log.hpp>
 #include <mcp/methods.hpp>
 
 namespace mcp {
@@ -175,7 +178,12 @@ void Session::handle_message(Message message) {
             std::lock_guard<std::mutex> lock(cancelled_mutex_);
             protected_request_id_ = request->id;
         }
+        MCP_LOG(debug, "--> " << request->method << " (id "
+                              << request_id_to_string(request->id) << ")");
         if (auto error = check_incoming_request(*request)) {
+            MCP_LOG(warn, "<-- error " << error->code << " for "
+                                       << request->method << ": "
+                                       << error->message);
             JsonRpcResponse response;
             response.id = request->id;
             response.error = std::move(*error);
@@ -183,6 +191,14 @@ void Session::handle_message(Message message) {
             return;
         }
         if (auto response = router_.dispatch(message)) {
+            if (response->is_error()) {
+                MCP_LOG(warn, "<-- error " << response->error->code << " for "
+                                           << request->method << ": "
+                                           << response->error->message);
+            } else {
+                MCP_LOG(debug, "<-- result (id "
+                                   << request_id_to_string(request->id) << ")");
+            }
             send_message(Message(std::move(*response)));
         }
         return;
@@ -370,6 +386,10 @@ ServerSession::ServerSession(std::shared_ptr<Transport> transport,
                     break;
                 }
             }
+            MCP_LOG(info, "initialize: client \""
+                              << parsed.client_info.name << "\" v"
+                              << parsed.client_info.version << " -> protocol "
+                              << negotiated);
             return json(InitializeResult{negotiated, options_.capabilities,
                                          options_.server_info,
                                          options_.instructions});
@@ -379,6 +399,7 @@ ServerSession::ServerSession(std::shared_ptr<Transport> transport,
         methods::kNotificationInitialized, [this](const std::optional<json>&) {
             if (state() == SessionState::Initializing) {
                 set_state(SessionState::Operating);
+                MCP_LOG(info, "session operating");
             }
         });
 }

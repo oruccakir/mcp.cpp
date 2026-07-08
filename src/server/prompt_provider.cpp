@@ -1,6 +1,10 @@
+#define MCP_LOG_COMPONENT "registry"
+
 #include <mcp/server/prompt_provider.hpp>
 
 #include <algorithm>
+
+#include <mcp/log.hpp>
 
 namespace mcp {
 
@@ -66,6 +70,9 @@ Result<void> PromptProvider::add_prompt(Prompt prompt, PromptHandler handler) {
         }
         prompts_.emplace_back(std::move(prompt), std::move(handler));
         changed = changed_callback_;
+        MCP_LOG(info, "prompt registered: \""
+                          << prompts_.back().first.name << "\" ("
+                          << prompts_.size() << " total)");
     }
     if (changed) {
         changed();

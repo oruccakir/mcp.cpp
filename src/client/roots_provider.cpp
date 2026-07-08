@@ -1,6 +1,10 @@
+#define MCP_LOG_COMPONENT "registry"
+
 #include <mcp/client/roots_provider.hpp>
 
 #include <algorithm>
+
+#include <mcp/log.hpp>
 
 namespace mcp {
 
@@ -30,6 +34,8 @@ Result<void> RootsProvider::add_root(Root root) {
         }
         roots_.push_back(std::move(root));
         changed = changed_callback_;
+        MCP_LOG(info, "root registered: " << roots_.back().uri << " ("
+                                          << roots_.size() << " total)");
     }
     if (changed) {
         changed();

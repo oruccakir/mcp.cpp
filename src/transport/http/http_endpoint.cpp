@@ -1,8 +1,11 @@
+#define MCP_LOG_COMPONENT "http"
+
 #include "http_endpoint.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 
+#include <mcp/log.hpp>
 #include <mcp/types.hpp>
 
 namespace mcp::detail {
@@ -41,6 +44,8 @@ bool HttpEndpoint::start(std::string& error) {
         return false;
     }
     bound_port_.store(pal::tcp_local_port(listen_fd_));
+    MCP_LOG(info, "listening on " << options_.host << ":" << bound_port_.load()
+                                  << " (path " << options_.path << ")");
     accept_thread_ = std::thread([this] { accept_loop(); });
     return true;
 }
@@ -124,6 +129,13 @@ void HttpEndpoint::write_simple(std::intptr_t fd, int status, const std::string&
     for (const auto& header : extra_headers) {
         headers.push_back(header);
     }
+    if (status >= 400) {
+        MCP_LOG(warn, "HTTP " << status << " " << reason
+                              << (body.empty() ? "" : ": ") << body);
+    } else {
+        MCP_LOG(debug, "HTTP " << status << " " << reason << " ("
+                               << body.size() << " bytes)");
+    }
     const auto payload = serialize_response(status, reason, headers, body);
     (void)pal::write_all(fd, payload.data(), payload.size());
 }
@@ -163,6 +175,7 @@ void HttpEndpoint::handle_connection(std::intptr_t fd) {
             break;
         }
 
+        MCP_LOG(info, head.method << " " << head.target);
         if (head.target != options_.path) {
             write_simple(fd, 404, "Not Found", "unknown path");
             break;
