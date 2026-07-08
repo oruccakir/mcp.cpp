@@ -10,6 +10,7 @@ add_library(mcp-core STATIC
 add_library(mcp::core ALIAS mcp-core)
 target_include_directories(mcp-core PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(mcp-core PUBLIC
@@ -64,6 +65,7 @@ endif()
 mcp_set_warnings(mcp-transport)
 
 # mcp-server: tools, resources, prompts, logging, completions, Server facade
+if(MCP_BUILD_SERVER)
 add_library(mcp-server STATIC
     server/tool_registry.cpp
     server/resource_provider.cpp
@@ -75,10 +77,12 @@ add_library(mcp-server STATIC
 add_library(mcp::server ALIAS mcp-server)
 target_link_libraries(mcp-server PUBLIC mcp-core)
 mcp_set_warnings(mcp-server)
+endif()
 
 # mcp-client: sampling, roots, elicitation, Client facade.
 # Links mcp-server for the shared feature types (Tool, Resource, Prompt)
 # used by the typed client wrappers.
+if(MCP_BUILD_CLIENT)
 add_library(mcp-client STATIC
     client/sampling.cpp
     client/roots_provider.cpp
@@ -87,3 +91,32 @@ add_library(mcp-client STATIC
 add_library(mcp::client ALIAS mcp-client)
 target_link_libraries(mcp-client PUBLIC mcp-core mcp-server)
 mcp_set_warnings(mcp-client)
+endif()
+
+# --- Install (FR-BUILD-003): one export set, namespace mcp:: ---------------
+if(MCP_INSTALL)
+    include(GNUInstallDirs)
+    # Installed names match the in-tree aliases (mcp::core, mcp::server, ...).
+    set_target_properties(mcp-core PROPERTIES EXPORT_NAME core)
+    set_target_properties(mcp-transport PROPERTIES EXPORT_NAME transport)
+    set_target_properties(nlohmann_json PROPERTIES EXPORT_NAME vendored-json)
+    if(MCP_BUILD_SERVER)
+        set_target_properties(mcp-server PROPERTIES EXPORT_NAME server)
+    endif()
+    if(MCP_BUILD_CLIENT)
+        set_target_properties(mcp-client PROPERTIES EXPORT_NAME client)
+    endif()
+    # The vendored json INTERFACE target must join the export set so the
+    # libraries' recorded link dependency resolves as mcp::nlohmann_json.
+    install(TARGETS mcp-core mcp-transport nlohmann_json
+        EXPORT mcp-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    if(MCP_BUILD_SERVER)
+        install(TARGETS mcp-server EXPORT mcp-targets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
+    if(MCP_BUILD_CLIENT)
+        install(TARGETS mcp-client EXPORT mcp-targets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
+endif()
