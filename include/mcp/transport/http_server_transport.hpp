@@ -73,6 +73,9 @@ private:
     HttpServerOptions options_;
     std::unique_ptr<detail::HttpEndpoint> endpoint_;
     std::unique_ptr<detail::SseChannel> channel_;
+    /// Published separately so port() is safe while another thread runs
+    /// connect() (the common "spin until bound" test/startup pattern).
+    std::atomic<std::uint16_t> bound_port_{0};
     std::atomic<bool> close_emitted_{false};
 
     std::mutex handler_mutex_;
