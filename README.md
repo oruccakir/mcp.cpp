@@ -1,6 +1,6 @@
 # mcp.cpp
 
-[![CI](https://github.com/oruccakir/mcp.cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/oruccakir/mcp.cpp/actions/workflows/ci.yml)
+[![CI](https://github.com/oruccakir/mcp.cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/oruccakir/mcp.cpp/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A production-grade **C++ SDK for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io)** — servers *and* clients, over stdio and Streamable HTTP, with zero runtime dependencies beyond [nlohmann/json](https://github.com/nlohmann/json).
 
@@ -85,6 +85,22 @@ ctest --test-dir build --output-on-failure
 ```
 
 CMake targets to link against: `mcp::core`, `mcp::transport`, `mcp::server`, `mcp::client`.
+
+## Installing
+
+```bash
+cmake --preset release && cmake --build --preset release -j
+cmake --install build/release --prefix /your/prefix
+```
+
+Then from any project:
+
+```cmake
+find_package(mcp CONFIG REQUIRED)   # CMAKE_PREFIX_PATH=/your/prefix
+target_link_libraries(app PRIVATE mcp::server mcp::transport)
+```
+
+The install is self-contained (the bundled nlohmann/json ships under `include/mcp/vendor` — no external dependency to resolve). `MCP_BUILD_SERVER`/`MCP_BUILD_CLIENT` (default ON) trim the package for minimal consumers. Alternatives: plain `add_subdirectory`/FetchContent of this repo; a vcpkg overlay port under `ports/` (`--overlay-ports=<repo>/ports`); a `conanfile.py` for Conan 2. The project is MIT-licensed; the vcpkg/Conan recipes become registry-publishable once a release tag exists (update REF/SHA512 in the portfile).
 
 ## Usage
 
@@ -219,3 +235,6 @@ Planned (phase 5+): embedded profile (`-fno-exceptions`, `-fno-rtti`, custom all
 - Handlers return `mcp::Result<T>`; returning an `mcp::Error` becomes a JSON-RPC error response. Exceptions are supported but never required.
 - Message dispatch is synchronous on the transport read thread: never block a request handler waiting on a round-trip to the peer — do that work on a separate thread (see `tests/tools/prober_stdio.cpp`).
 - `SRS.md` is the source of truth; requirement ids (e.g. `FR-TRAN-009`) are cited at their implementation and test sites.
+## License
+
+MIT — see [LICENSE](LICENSE). The bundled nlohmann/json is also MIT (third_party/nlohmann/LICENSE.MIT).

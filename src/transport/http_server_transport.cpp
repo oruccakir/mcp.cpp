@@ -37,7 +37,7 @@ void HttpServerTransport::emit_error(const Error& error) {
 }
 
 std::uint16_t HttpServerTransport::port() const {
-    return endpoint_ ? endpoint_->port() : 0;
+    return bound_port_.load();
 }
 
 void HttpServerTransport::connect() {
@@ -54,7 +54,9 @@ void HttpServerTransport::connect() {
         endpoint_.reset();
         channel_.reset();
         emit_error(Error(ErrorCode::InternalError, "http listen failed: " + error));
+        return;
     }
+    bound_port_.store(endpoint_->port());
 }
 
 void HttpServerTransport::disconnect() {

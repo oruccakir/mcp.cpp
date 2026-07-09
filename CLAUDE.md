@@ -49,7 +49,7 @@ cmake --build build -j && ctest --test-dir build --output-on-failure
 
 Presets (CMakePresets.json, schema v3/CMake ≥3.21): `dev` (Debug+logging), `debug`, `release`, `ci` (Werror). Per-user overrides belong in `CMakeUserPresets.json` (gitignored).
 
-Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON at top level), `MCP_USE_EXCEPTIONS` (ON; the OFF path is Phase 5), `MCP_WERROR` (OFF locally, ON in CI), `MCP_ENABLE_LOGGING` (OFF; compiles in the `MCP_LOG` stderr diagnostics — see include/mcp/log.hpp; runtime level via the `MCP_LOG` env var; distinct from the protocol-level `mcp::Logger`. When adding MCP_LOG lines, anything referenced *only* inside them must not trigger unused warnings in OFF builds). Further options planned per FR-BUILD-002: `MCP_BUILD_SERVER`, `MCP_BUILD_CLIENT`, `MCP_USE_ASIO`, `MCP_USE_SIMDJSON`, `MCP_EMBEDDED_PROFILE`.
+Options wired so far: `MCP_BUILD_TESTS`, `MCP_BUILD_EXAMPLES` (both default ON at top level), `MCP_USE_EXCEPTIONS` (ON; the OFF path is Phase 5), `MCP_WERROR` (OFF locally, ON in CI), `MCP_ENABLE_LOGGING` (OFF; compiles in the `MCP_LOG` stderr diagnostics — see include/mcp/log.hpp; runtime level via the `MCP_LOG` env var; distinct from the protocol-level `mcp::Logger`. When adding MCP_LOG lines, anything referenced *only* inside them must not trigger unused warnings in OFF builds). `MCP_BUILD_SERVER`/`MCP_BUILD_CLIENT` (ON; trim for minimal consumers, client implies server), `MCP_INSTALL` (ON at top level; export set `mcp-targets`, `find_package(mcp CONFIG)` — CI job install-consumer proves it). Still planned: `MCP_USE_ASIO`, `MCP_USE_SIMDJSON`, `MCP_EMBEDDED_PROFILE`.
 
 Library targets: `mcp::core` (engine, sessions, content, schema), `mcp::transport` (stdio + Streamable HTTP), `mcp::server` (tools/resources/prompts/logging/completions + `mcp::Server` facade), `mcp::client` (sampling/roots/elicitation + `mcp::Client` facade; links mcp-server for the shared feature types). Example servers live in examples/ (echo, calculator, echo_server_http).
 
@@ -69,7 +69,7 @@ Manual smoke test of the protocol: pipe newline-delimited JSON-RPC into `./build
 ## Testing Expectations (SRS §5.11)
 
 - Unit tests per component; integration tests for full protocol flows (initialize handshake, tool round-trips over both transports, subscriptions, sampling, reconnection)
-- A spec-conformance suite must be built in-house (no official one exists)
+- In-house spec-conformance suite: tests/test_conformance.cpp drives the SRS §10 message catalog as raw wire JSON and asserts response shapes, exact method strings, camelCase keys, and the error-code catalog. Extend it when adding protocol surface.
 - Target: ≥90% line coverage
 
 ## Implementation Order (SRS §7)

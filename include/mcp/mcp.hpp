@@ -30,3 +30,4 @@
 #include <mcp/transport/stdio_transport.hpp>
 #include <mcp/transport/transport.hpp>
 #include <mcp/types.hpp>
+#include <mcp/version.hpp>

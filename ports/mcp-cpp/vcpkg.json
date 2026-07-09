@@ -1,0 +1,8 @@
+{
+    "name": "mcp-cpp",
+    "version": "0.1.0",
+    "description": "C++ SDK for the Model Context Protocol (MCP): servers and clients over stdio and Streamable HTTP.",
+    "homepage": "https://github.com/oruccakir/mcp.cpp",
+    "license": "MIT",
+    "supports": "!uwp"
+}

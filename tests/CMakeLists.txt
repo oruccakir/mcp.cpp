@@ -32,6 +32,7 @@ add_executable(mcp_tests
     test_client.cpp
     test_client_integration.cpp
     test_log.cpp
+    test_conformance.cpp
     test_http_codec.cpp
     test_http_transport.cpp
     test_http_session.cpp
@@ -42,9 +43,15 @@ target_link_libraries(mcp_tests PRIVATE
 target_compile_definitions(mcp_tests PRIVATE
     ECHO_STDIO_PATH="$<TARGET_FILE:echo_stdio>"
     TOOLBOX_STDIO_PATH="$<TARGET_FILE:toolbox_stdio>"
-    PROBER_STDIO_PATH="$<TARGET_FILE:prober_stdio>"
-    ECHO_SERVER_HTTP_PATH="$<TARGET_FILE:echo_server_http>")
-add_dependencies(mcp_tests echo_stdio toolbox_stdio prober_stdio echo_server_http)
+    PROBER_STDIO_PATH="$<TARGET_FILE:prober_stdio>")
+add_dependencies(mcp_tests echo_stdio toolbox_stdio prober_stdio)
+# The HTTP integration test spawns an example binary; skip it (compile-time)
+# when examples are not built.
+if(TARGET echo_server_http)
+    target_compile_definitions(mcp_tests PRIVATE
+        ECHO_SERVER_HTTP_PATH="$<TARGET_FILE:echo_server_http>")
+    add_dependencies(mcp_tests echo_server_http)
+endif()
 mcp_set_warnings(mcp_tests)
 
 include(GoogleTest)
