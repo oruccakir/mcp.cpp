@@ -17,6 +17,7 @@ namespace {
 
 using namespace mcp;
 
+#if defined(ECHO_SERVER_HTTP_PATH)  // requires MCP_BUILD_EXAMPLES
 TEST(HttpIntegration, EchoServerOverRealHttp) {
     StdioServerParameters parameters;
     parameters.command = ECHO_SERVER_HTTP_PATH;
@@ -70,5 +71,6 @@ TEST(HttpIntegration, EchoServerOverRealHttp) {
     client.disconnect();
     process->disconnect();  // close stdin -> SIGTERM -> SIGKILL (FR-TRAN-004)
 }
+#endif  // ECHO_SERVER_HTTP_PATH
 
 }  // namespace
