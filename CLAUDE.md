@@ -69,7 +69,7 @@ Manual smoke test of the protocol: pipe newline-delimited JSON-RPC into `./build
 ## Testing Expectations (SRS §5.11)
 
 - Unit tests per component; integration tests for full protocol flows (initialize handshake, tool round-trips over both transports, subscriptions, sampling, reconnection)
-- A spec-conformance suite must be built in-house (no official one exists)
+- In-house spec-conformance suite: tests/test_conformance.cpp drives the SRS §10 message catalog as raw wire JSON and asserts response shapes, exact method strings, camelCase keys, and the error-code catalog. Extend it when adding protocol surface.
 - Target: ≥90% line coverage
 
 ## Implementation Order (SRS §7)
