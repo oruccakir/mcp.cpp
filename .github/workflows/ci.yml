@@ -56,6 +56,35 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
 
+  thread-sanitizer:
+    name: thread sanitizer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # New kernels' ASLR entropy (mmap_rnd_bits=32) breaks current TSan
+      # runtimes ("unexpected memory mapping").
+      - name: Lower ASLR entropy for TSan
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Configure
+        env:
+          CC: clang
+          CXX: clang++
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug
+          -DMCP_BUILD_TESTS=ON -DMCP_BUILD_EXAMPLES=ON
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test under TSan
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: ctest --test-dir build --output-on-failure
+
   install-consumer:
     name: install & consume
     runs-on: ubuntu-latest
