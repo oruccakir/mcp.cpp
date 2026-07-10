@@ -3,6 +3,9 @@
 
 #include <gtest/gtest.h>
 
+// Subprocess-spawning tests require pal process support (hosts only).
+#if defined(MCP_PAL_HAS_PROCESS)
+
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -148,3 +151,5 @@ TEST(Integration, EnvAndArgsArePassedToChild) {
 #endif  // !_WIN32
 
 }  // namespace
+
+#endif  // MCP_PAL_HAS_PROCESS

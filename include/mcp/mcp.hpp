@@ -26,7 +26,9 @@
 #include <mcp/transport/http_client_transport.hpp>
 #include <mcp/transport/http_server_transport.hpp>
 #include <mcp/transport/http_session_server.hpp>
+#if defined(MCP_PAL_HAS_PROCESS)
 #include <mcp/transport/stdio_client_transport.hpp>
+#endif
 #include <mcp/transport/stdio_transport.hpp>
 #include <mcp/transport/transport.hpp>
 #include <mcp/types.hpp>

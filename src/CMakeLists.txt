@@ -1,3 +1,32 @@
+# Platform Abstraction Layer backend selection (SRS §3.1, FR-EMB-002).
+# Transports only ever call the pal:: API from src/platform/pal.hpp; adding
+# an OS means adding a backend directory here, not touching transport code.
+if(CMAKE_SYSTEM_NAME STREQUAL "VxWorks")
+    # VxWorks 7 RTPs: POSIX io/net, but no fork/exec — the process module
+    # (and with it the stdio client transport) is compiled out.
+    set(MCP_PAL_SOURCES
+        platform/vxworks/io.cpp
+        platform/vxworks/net.cpp
+    )
+    set(MCP_PAL_HAS_PROCESS OFF)
+elseif(WIN32)
+    set(MCP_PAL_SOURCES
+        platform/win32/io.cpp
+        platform/win32/net.cpp
+        platform/win32/process.cpp
+    )
+    set(MCP_PAL_HAS_PROCESS ON)
+elseif(UNIX)
+    set(MCP_PAL_SOURCES
+        platform/posix/io.cpp
+        platform/posix/net.cpp
+        platform/posix/process.cpp
+    )
+    set(MCP_PAL_HAS_PROCESS ON)
+else()
+    message(FATAL_ERROR "No PAL backend for this platform")
+endif()
+
 # mcp-core: JSON-RPC engine, router, session, protocol types (FR-BUILD-001)
 add_library(mcp-core STATIC
     jsonrpc/message.cpp
@@ -21,26 +50,10 @@ target_compile_features(mcp-core PUBLIC cxx_std_17)
 if(MCP_ENABLE_LOGGING)
     target_compile_definitions(mcp-core PUBLIC MCP_LOG_ENABLED)
 endif()
-mcp_set_warnings(mcp-core)
-
-# Platform Abstraction Layer backend selection (SRS §3.1, FR-EMB-002).
-# Transports only ever call the pal:: API from src/platform/pal.hpp; adding
-# an OS means adding a backend directory here, not touching transport code.
-if(WIN32)
-    set(MCP_PAL_SOURCES
-        platform/win32/io.cpp
-        platform/win32/net.cpp
-        platform/win32/process.cpp
-    )
-elseif(UNIX)
-    set(MCP_PAL_SOURCES
-        platform/posix/io.cpp
-        platform/posix/net.cpp
-        platform/posix/process.cpp
-    )
-else()
-    message(FATAL_ERROR "No PAL backend for this platform")
+if(MCP_PAL_HAS_PROCESS)
+    target_compile_definitions(mcp-core PUBLIC MCP_PAL_HAS_PROCESS)
 endif()
+mcp_set_warnings(mcp-core)
 
 # mcp-transport: stdio + Streamable HTTP transports over the PAL
 add_library(mcp-transport STATIC
@@ -48,7 +61,6 @@ add_library(mcp-transport STATIC
     transport/line_transport.cpp
     transport/line_io.cpp
     transport/stdio_transport.cpp
-    transport/stdio_client_transport.cpp
     transport/http/http_codec.cpp
     transport/http/http_endpoint.cpp
     transport/http/sse_channel.cpp
@@ -56,6 +68,9 @@ add_library(mcp-transport STATIC
     transport/http_client_transport.cpp
     transport/http_session_server.cpp
 )
+if(MCP_PAL_HAS_PROCESS)
+    target_sources(mcp-transport PRIVATE transport/stdio_client_transport.cpp)
+endif()
 add_library(mcp::transport ALIAS mcp-transport)
 target_include_directories(mcp-transport PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mcp-transport PUBLIC mcp-core)
