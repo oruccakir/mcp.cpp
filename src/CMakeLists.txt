@@ -4,12 +4,14 @@
 if(CMAKE_SYSTEM_NAME STREQUAL "VxWorks")
     # VxWorks 7 RTPs: POSIX io/net, but no fork/exec — the process module
     # (and with it the stdio client transport) is compiled out.
+    set(MCP_PAL_BACKEND "vxworks")
     set(MCP_PAL_SOURCES
         platform/vxworks/io.cpp
         platform/vxworks/net.cpp
     )
     set(MCP_PAL_HAS_PROCESS OFF)
 elseif(WIN32)
+    set(MCP_PAL_BACKEND "win32")
     set(MCP_PAL_SOURCES
         platform/win32/io.cpp
         platform/win32/net.cpp
@@ -17,6 +19,7 @@ elseif(WIN32)
     )
     set(MCP_PAL_HAS_PROCESS ON)
 elseif(UNIX)
+    set(MCP_PAL_BACKEND "posix")
     set(MCP_PAL_SOURCES
         platform/posix/io.cpp
         platform/posix/net.cpp
@@ -26,6 +29,24 @@ elseif(UNIX)
 else()
     message(FATAL_ERROR "No PAL backend for this platform")
 endif()
+
+# Configure-time banner: which platform this build targets and how the
+# platform-dependent pieces resolved (CMAKE_SYSTEM_NAME comes from the host
+# OS on native builds, or from the toolchain file when cross-compiling).
+if(CMAKE_CROSSCOMPILING)
+    set(MCP_BUILD_KIND "cross-compiling on ${CMAKE_HOST_SYSTEM_NAME}")
+else()
+    set(MCP_BUILD_KIND "native")
+endif()
+message(STATUS "----------------------------------------------")
+message(STATUS "mcp.cpp ${PROJECT_VERSION}")
+message(STATUS "  target platform : ${CMAKE_SYSTEM_NAME} (${CMAKE_SYSTEM_PROCESSOR}), ${MCP_BUILD_KIND}")
+message(STATUS "  compiler        : ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+message(STATUS "  PAL backend     : ${MCP_PAL_BACKEND}")
+message(STATUS "  process spawn   : ${MCP_PAL_HAS_PROCESS}")
+message(STATUS "  server / client : ${MCP_BUILD_SERVER} / ${MCP_BUILD_CLIENT}")
+message(STATUS "  MCP_LOG         : ${MCP_ENABLE_LOGGING}")
+message(STATUS "----------------------------------------------")
 
 # mcp-core: JSON-RPC engine, router, session, protocol types (FR-BUILD-001)
 add_library(mcp-core STATIC
