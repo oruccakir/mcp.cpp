@@ -25,6 +25,7 @@ option(MCP_ENABLE_LOGGING
     "Compile in MCP_LOG diagnostic logging (stderr; runtime level via MCP_LOG env)"
     OFF)
 option(MCP_INSTALL "Generate install rules and package config" ${MCP_IS_TOP_LEVEL})
+option(MCP_BUILD_TOOLS "Build bring-up tools (pal_selftest)" ${MCP_IS_TOP_LEVEL})
 
 # The client SDK links the server feature types (FR-BUILD-002).
 if(MCP_BUILD_CLIENT AND NOT MCP_BUILD_SERVER)
@@ -56,6 +57,14 @@ if(MCP_BUILD_EXAMPLES)
         add_subdirectory(examples)
     else()
         message(STATUS "Examples require MCP_BUILD_SERVER; skipping")
+    endif()
+endif()
+
+if(MCP_BUILD_TOOLS)
+    if(MCP_BUILD_SERVER AND MCP_BUILD_CLIENT)
+        add_subdirectory(tools)
+    else()
+        message(STATUS "Tools require MCP_BUILD_SERVER and MCP_BUILD_CLIENT; skipping")
     endif()
 endif()
 

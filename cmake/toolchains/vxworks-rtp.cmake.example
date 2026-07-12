@@ -1,0 +1,37 @@
+# VxWorks 7 RTP toolchain template — COPY to vxworks-rtp.cmake and fill the
+# <PLACEHOLDERS> from your Wind River installation, then configure with:
+#
+#   cmake -B build-vxworks \
+#       -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/vxworks-rtp.cmake \
+#       -DMCP_BUILD_TESTS=OFF -DMCP_BUILD_EXAMPLES=ON -DMCP_BUILD_TOOLS=ON
+#
+# Notes:
+# - Newer Wind River releases ship their own CMake integration
+#   (wrenv + ${WIND_CC_SYSROOT}/mk/cmake or Workbench-generated toolchains);
+#   if yours does, PREFER that file over this template and just pass the
+#   MCP_* options above.
+# - This template assumes the LLVM-based toolchain (C++17) and an RTP VSB.
+
+set(CMAKE_SYSTEM_NAME VxWorks)
+set(CMAKE_SYSTEM_PROCESSOR <CPU>)              # e.g. aarch64, x86_64, ppc
+
+set(WIND_HOME   "<WIND_HOME>")                 # Wind River install root
+set(WIND_VSB    "<PATH_TO_VSB>")               # your VxWorks Source Build dir
+
+# LLVM-based compilers from the toolchain (check exact names in your install;
+# 'wr-cc'/'wr-c++' wrappers or clang/clang++ under the host tools dir).
+set(CMAKE_C_COMPILER   "<PATH_TO>/wr-cc")
+set(CMAKE_CXX_COMPILER "<PATH_TO>/wr-c++")
+
+# RTP mode flags (wr-* wrappers usually infer these from the environment set
+# up by wrenv; add explicitly if configuring outside wrenv).
+add_compile_options(-rtp)
+add_link_options(-rtp)
+
+# C++17 with the LLVM libc++ shipped in VxWorks 7 (SR0620+).
+set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_FIND_ROOT_PATH "${WIND_VSB}")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)

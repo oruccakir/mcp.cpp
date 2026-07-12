@@ -17,7 +17,7 @@ namespace {
 
 using namespace mcp;
 
-#if defined(ECHO_SERVER_HTTP_PATH)  // requires MCP_BUILD_EXAMPLES
+#if defined(ECHO_SERVER_HTTP_PATH) && defined(MCP_PAL_HAS_PROCESS)
 TEST(HttpIntegration, EchoServerOverRealHttp) {
     StdioServerParameters parameters;
     parameters.command = ECHO_SERVER_HTTP_PATH;

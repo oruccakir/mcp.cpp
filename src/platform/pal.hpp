@@ -97,8 +97,13 @@ fd_t tcp_accept(fd_t listen_fd);
 void ignore_broken_pipe_signals();
 
 // --- Child processes (host platforms only; stdio client transport) ----------
-// Not available on VxWorks/FreeRTOS backends — the stdio *client* transport
-// is host-only by nature (FR-TRAN-002).
+// Capability-gated: backends with process support define
+// MCP_PAL_HAS_PROCESS via CMake (posix, win32). VxWorks RTPs have no
+// fork/exec (rtpSpawn is a different model) and FreeRTOS has no processes
+// at all — there the stdio *client* transport is compiled out entirely
+// (FR-TRAN-002 is host-only by nature) and any use of this section is a
+// compile error rather than a link surprise.
+#if defined(MCP_PAL_HAS_PROCESS)
 
 struct ProcessSpec {
     std::string command;
@@ -132,5 +137,7 @@ void terminate(Process& process, bool force);
 /// Portable interpretation of a `wait_exit` status.
 bool exited_normally(int status);
 int exit_code(int status);
+
+#endif  // MCP_PAL_HAS_PROCESS
 
 }  // namespace mcp::pal

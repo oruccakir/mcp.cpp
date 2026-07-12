@@ -3,6 +3,9 @@
 
 #include <gtest/gtest.h>
 
+// Subprocess-spawning tests require pal process support (hosts only).
+#if defined(MCP_PAL_HAS_PROCESS)
+
 #include <chrono>
 #include <thread>
 
@@ -125,3 +128,5 @@ TEST(ClientIntegration, ServerInitiatedFeaturesViaProber) {
 }
 
 }  // namespace
+
+#endif  // MCP_PAL_HAS_PROCESS
