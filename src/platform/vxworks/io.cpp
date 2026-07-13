@@ -1,12 +1,12 @@
-// VxWorks 7 RTP backend: descriptor I/O, WakeEvent (loopback socket pair),
-// poll.
+// VxWorks (RTP + DKM) backend: descriptor I/O, WakeEvent (loopback socket
+// pair), readiness via select().
 //
-// Written for user-mode RTPs. WakeEvent uses a connected loopback TCP pair
-// rather than pipe(): VxWorks pipe() needs the pipe driver component in the
-// kernel image (often absent in RTP images — it fails at runtime with
-// "failed to create wake event"), whereas the socket stack is already a
-// hard requirement of the HTTP transport. Same approach as the win32
-// backend. See docs/vxworks-port.md.
+// WakeEvent uses a connected loopback TCP pair rather than pipe(): VxWorks
+// pipe() needs the pipe driver component (often absent), whereas the socket
+// stack is already required by the HTTP transport. Readiness uses select()
+// rather than poll(): poll() is undefined when linked as a kernel module
+// (DKM), while select() is available in both RTP and kernel mode. Same
+// loopback-pair approach as the win32 backend. See docs/vxworks-port.md.
 
 #include "../pal.hpp"
 
@@ -16,8 +16,9 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <poll.h>
+#include <selectLib.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 namespace mcp::pal {
@@ -133,16 +134,25 @@ fd_t WakeEvent::poll_handle() const { return fds_[0]; }
 
 int poll_readable(fd_t fd, const WakeEvent* wake, int timeout_ms) {
     const fd_t wake_fd = wake ? wake->poll_handle() : kInvalidFd;
-    struct pollfd fds[2];
-    fds[0].fd = fd;
-    fds[0].events = POLLIN;
-    fds[0].revents = 0;
-    fds[1].fd = wake_fd;
-    fds[1].events = POLLIN;
-    fds[1].revents = 0;
-    const nfds_t count = wake_fd >= 0 ? 2 : 1;
+    int max_fd = fd;
+    if (wake_fd > max_fd) {
+        max_fd = wake_fd;
+    }
     for (;;) {
-        const int rc = ::poll(fds, count, timeout_ms);
+        fd_set read_set;
+        FD_ZERO(&read_set);
+        FD_SET(fd, &read_set);
+        if (wake_fd >= 0) {
+            FD_SET(wake_fd, &read_set);
+        }
+        struct timeval tv;
+        struct timeval* tvp = nullptr;
+        if (timeout_ms >= 0) {
+            tv.tv_sec = timeout_ms / 1000;
+            tv.tv_usec = (timeout_ms % 1000) * 1000;
+            tvp = &tv;
+        }
+        const int rc = ::select(max_fd + 1, &read_set, nullptr, nullptr, tvp);
         if (rc < 0) {
             if (errno == EINTR) {
                 continue;
@@ -152,10 +162,10 @@ int poll_readable(fd_t fd, const WakeEvent* wake, int timeout_ms) {
         if (rc == 0) {
             return 0;  // timeout
         }
-        if (count == 2 && fds[1].revents != 0) {
+        if (wake_fd >= 0 && FD_ISSET(wake_fd, &read_set)) {
             return 0;  // woken
         }
-        if (fds[0].revents != 0) {
+        if (FD_ISSET(fd, &read_set)) {
             return 1;
         }
     }
