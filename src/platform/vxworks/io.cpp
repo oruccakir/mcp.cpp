@@ -1,16 +1,21 @@
-// VxWorks 7 RTP backend: descriptor I/O, WakeEvent (self-pipe), poll.
+// VxWorks 7 RTP backend: descriptor I/O, WakeEvent (loopback socket pair),
+// poll.
 //
-// Written for user-mode RTPs, where VxWorks provides the POSIX surface used
-// below (pipe/read/write/close/poll). Deliberately conservative: mirrors the
-// posix backend with VxWorks-safe choices only. First compiled on an
-// air-gapped Wind River toolchain — if something here fails to build, see
-// docs/vxworks-port.md for the report-back checklist.
+// Written for user-mode RTPs. WakeEvent uses a connected loopback TCP pair
+// rather than pipe(): VxWorks pipe() needs the pipe driver component in the
+// kernel image (often absent in RTP images — it fails at runtime with
+// "failed to create wake event"), whereas the socket stack is already a
+// hard requirement of the HTTP transport. Same approach as the win32
+// backend. See docs/vxworks-port.md.
 
 #include "../pal.hpp"
 
 #include <cerrno>
 #include <csignal>
+#include <cstring>
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -59,8 +64,53 @@ void shutdown_fd(fd_t fd) {
     }
 }
 
+namespace {
+
+// Connected loopback TCP pair (VxWorks lacks a reliable socketpair() for
+// AF_INET). Returns false on any failure.
+bool make_loopback_pair(fd_t& read_side, fd_t& write_side) {
+    read_side = write_side = kInvalidFd;
+    const fd_t listener = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (listener < 0) {
+        return false;
+    }
+    sockaddr_in addr;
+    std::memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    socklen_t len = sizeof(addr);
+    if (::bind(listener, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 ||
+        ::listen(listener, 1) != 0 ||
+        ::getsockname(listener, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
+        ::close(listener);
+        return false;
+    }
+    const fd_t connector = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (connector < 0 ||
+        ::connect(connector, reinterpret_cast<sockaddr*>(&addr),
+                  sizeof(addr)) != 0) {
+        if (connector >= 0) {
+            ::close(connector);
+        }
+        ::close(listener);
+        return false;
+    }
+    const fd_t accepted = ::accept(listener, nullptr, nullptr);
+    ::close(listener);
+    if (accepted < 0) {
+        ::close(connector);
+        return false;
+    }
+    read_side = accepted;    // polled side
+    write_side = connector;  // signalled side
+    return true;
+}
+
+}  // namespace
+
 WakeEvent::WakeEvent() {
-    if (::pipe(fds_) != 0) {
+    if (!make_loopback_pair(fds_[0], fds_[1])) {
         fds_[0] = fds_[1] = kInvalidFd;
     }
 }

@@ -63,7 +63,8 @@ Bring back (photo or typed — everything below is short):
 | `std::thread`/`mutex` errors | Toolchain not in C++17/libc++ mode or Diab selected — verify LLVM toolchain and `-std=c++17` |
 | Link errors on `shutdown`/sockets | RTP needs the network libs; wr-* wrappers normally add them — check VSB link groups |
 | `SIGPIPE` undeclared | Fine — the code guards it; report if other signal errors appear |
-| Everything compiles, selftest `tcp.*` fails | Loopback (`lo0`) not configured on the target image — check `ifconfig` in the kernel shell |
+| `failed to create wake event` at startup | Fixed: WakeEvent now uses a loopback socket pair instead of `pipe()` (the pipe driver is often absent in RTP images). Needs `lo0` up — see next row. |
+| Everything compiles, selftest `tcp.*` fails, or wake pair won't form | Loopback (`lo0`) not configured on the target image — check `ifconfig` in the kernel shell; the SDK needs 127.0.0.1 reachable |
 
 Each report round trips back into this branch as fixes; the selftest is the
 contract for "the port works".
