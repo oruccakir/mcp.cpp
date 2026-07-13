@@ -1,7 +1,10 @@
 #include "sse_channel.hpp"
 
 #include <cstdlib>
+#include <map>
 #include <vector>
+
+#include <mcp/sys/threading.hpp>
 
 #include "../../platform/pal.hpp"
 #include "http_codec.hpp"
@@ -112,51 +115,76 @@ void SseChannel::shutdown() {
 }
 
 // ---------------------------------------------------------- PostCapture
+//
+// Correlates POST responses with the connection thread that is dispatching a
+// POST (dispatch is synchronous on that thread). Keyed by thread id rather
+// than a thread_local: kernel-module (DKM) builds have no TLS
+// (__cxa_thread_atexit / DKM_TLS_SIZE), and a mutex-guarded map is portable.
+// A thread's presence in the map marks an active capture.
 
 namespace {
-struct CaptureState {
-    bool active = false;
-    std::vector<json> responses;
-};
-thread_local CaptureState t_capture;
+
+std::map<mcp::sys::thread::id, std::vector<json>>& capture_table() {
+    static std::map<mcp::sys::thread::id, std::vector<json>> table;
+    return table;
+}
+mcp::sys::mutex& capture_mutex() {
+    static mcp::sys::mutex mutex;
+    return mutex;
+}
+
 }  // namespace
 
 PostCapture::PostCapture() {
-    t_capture.active = true;
-    t_capture.responses.clear();
+    std::lock_guard<mcp::sys::mutex> lock(capture_mutex());
+    capture_table()[mcp::sys::this_thread::get_id()].clear();
 }
 
 PostCapture::~PostCapture() {
-    t_capture.active = false;
-    t_capture.responses.clear();
+    std::lock_guard<mcp::sys::mutex> lock(capture_mutex());
+    capture_table().erase(mcp::sys::this_thread::get_id());
 }
 
 bool PostCapture::try_capture(const Message& message) {
-    if (!t_capture.active ||
-        !std::holds_alternative<JsonRpcResponse>(message)) {
+    if (!std::holds_alternative<JsonRpcResponse>(message)) {
         return false;
     }
-    t_capture.responses.push_back(message_to_json(message));
+    std::lock_guard<mcp::sys::mutex> lock(capture_mutex());
+    const auto it = capture_table().find(mcp::sys::this_thread::get_id());
+    if (it == capture_table().end()) {
+        return false;  // no active capture on this thread
+    }
+    it->second.push_back(message_to_json(message));
     return true;
 }
 
 void PostCapture::add_error_response(const Error& error) {
     JsonRpcResponse response;
     response.error = error;
-    t_capture.responses.push_back(message_to_json(Message(response)));
+    std::lock_guard<mcp::sys::mutex> lock(capture_mutex());
+    const auto it = capture_table().find(mcp::sys::this_thread::get_id());
+    if (it != capture_table().end()) {
+        it->second.push_back(message_to_json(Message(response)));
+    }
 }
 
-bool PostCapture::empty() const { return t_capture.responses.empty(); }
+bool PostCapture::empty() const {
+    std::lock_guard<mcp::sys::mutex> lock(capture_mutex());
+    const auto it = capture_table().find(mcp::sys::this_thread::get_id());
+    return it == capture_table().end() || it->second.empty();
+}
 
 std::string PostCapture::body(bool as_batch) const {
+    std::lock_guard<mcp::sys::mutex> lock(capture_mutex());
+    const auto& responses = capture_table().at(mcp::sys::this_thread::get_id());
     if (as_batch) {
         json arr = json::array();
-        for (const auto& response : t_capture.responses) {
+        for (const auto& response : responses) {
             arr.push_back(response);
         }
         return arr.dump();
     }
-    return t_capture.responses.front().dump();
+    return responses.front().dump();
 }
 
 }  // namespace mcp::detail

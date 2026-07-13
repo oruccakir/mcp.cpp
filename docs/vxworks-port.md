@@ -76,7 +76,9 @@ Bring back (photo or typed — everything below is short):
 | `std::thread`/`mutex` errors from SDK code | Should not happen — the SDK uses `mcp::sys`, not `std::thread`. If seen, a stray `std::` slipped in; report the file/line. |
 | `semMCreate`/`taskSpawn`/`taskDelay` undeclared | VSB missing the core kernel libs (semLib/taskLib/sysLib) in the include path — normally always present; check the sysroot. |
 | condition-variable waits never wake, or hang | `taskDelay`/`sysClkRateGet` tick conversion issue, or priority inversion — report; the timer/SSE waits are the likely spots. |
-| `thread_local` link/runtime error (DKM) | Kernel task-local storage may need a VSB TLS component. Only `PostCapture` uses it (HTTP POST correlation); if it fails, this is the one spot to convert to a `taskIdSelf()`-keyed map — flag it and I will. |
+| `undefined symbol poll` (DKM) | Fixed: the VxWorks backend uses `select()` (available in kernel mode), not `poll()`. |
+| `__cxa_thread_atexit` / `DKM_TLS_SIZE (0) too small` | Fixed: the one `thread_local` (HTTP POST correlation) is now a thread-id-keyed map, so the module needs no TLS. |
+| `undefined symbol __stdioFp` (DKM) | The module references C stdio (`printf`/`fprintf`). Enable the ANSI stdio component in the VSB/kernel image (e.g. `INCLUDE_ANSI_STDIO`, and the fp table for `stdout`/`stderr`). The SDK libraries themselves use stdio only in `MCP_LOG` (off by default); it is `pal_selftest`/examples that print. |
 | Link errors on `shutdown`/sockets | RTP needs the network libs; wr-* wrappers normally add them — check VSB link groups |
 | `SIGPIPE` undeclared | Fine — the code guards it; report if other signal errors appear |
 | `failed to create wake event` at startup | Fixed: WakeEvent now uses a loopback socket pair instead of `pipe()` (the pipe driver is often absent in RTP images). Needs `lo0` up — see next row. |
