@@ -6,7 +6,7 @@
 #include <map>
 #include <optional>
 #include <string>
-#include <thread>
+#include <mcp/sys/threading.hpp>
 #include <vector>
 
 #include <mcp/transport/line_transport.hpp>
@@ -63,10 +63,10 @@ private:
     int stdout_fd_ = -1;
     int stderr_fd_ = -1;
 
-    std::thread stdout_thread_;
-    std::thread stderr_thread_;
+    mcp::sys::thread stdout_thread_;
+    mcp::sys::thread stderr_thread_;
 
-    std::mutex stderr_handler_mutex_;
+    mcp::sys::mutex stderr_handler_mutex_;
     std::function<void(std::string)> stderr_handler_;
 };
 

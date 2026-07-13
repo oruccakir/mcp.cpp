@@ -2,14 +2,12 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
+#include <mcp/sys/threading.hpp>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -113,19 +111,19 @@ private:
     std::atomic<SessionState> state_{SessionState::Uninitialized};
     std::atomic<std::int64_t> next_request_id_{1};
 
-    std::mutex timer_mutex_;
-    std::condition_variable timer_cv_;
+    mcp::sys::mutex timer_mutex_;
+    mcp::sys::condition_variable timer_cv_;
     bool stop_timer_ = false;
     std::unordered_map<RequestId, Deadline> deadlines_;
     std::unordered_map<ProgressToken, std::function<void(const ProgressNotification&)>>
         progress_callbacks_;
-    std::thread timer_thread_;
+    mcp::sys::thread timer_thread_;
 
-    mutable std::mutex cancelled_mutex_;
+    mutable mcp::sys::mutex cancelled_mutex_;
     std::unordered_set<RequestId> cancelled_incoming_;
     std::optional<RequestId> protected_request_id_;  // initialize, if seen
 
-    std::mutex callback_mutex_;
+    mcp::sys::mutex callback_mutex_;
     std::function<void()> close_callback_;
     std::function<void(const Error&)> error_callback_;
 };
@@ -161,7 +159,7 @@ protected:
 
 private:
     ServerOptions options_;
-    mutable std::mutex peer_mutex_;
+    mutable mcp::sys::mutex peer_mutex_;
     std::optional<Implementation> client_info_;
     std::optional<ClientCapabilities> client_capabilities_;
 };
@@ -192,7 +190,7 @@ protected:
 
 private:
     ClientOptions options_;
-    mutable std::mutex peer_mutex_;
+    mutable mcp::sys::mutex peer_mutex_;
     std::optional<Implementation> server_info_;
     std::optional<ServerCapabilities> server_capabilities_;
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <optional>
 #include <string>
 
@@ -87,7 +87,7 @@ private:
     PromptProvider prompts_;
     Logger logger_;
 
-    std::mutex session_mutex_;
+    mcp::sys::mutex session_mutex_;
     std::vector<ServerSession*> sessions_;
 };
 

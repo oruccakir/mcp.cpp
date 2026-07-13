@@ -2,7 +2,7 @@
 
 #include <functional>
 #include <map>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <optional>
 #include <set>
 #include <string>
@@ -101,7 +101,7 @@ public:
 private:
     bool uri_known_locked(const std::string& uri) const;
 
-    mutable std::mutex mutex_;
+    mutable mcp::sys::mutex mutex_;
     std::vector<std::pair<Resource, ReadHandler>> resources_;
     std::vector<ResourceTemplate> templates_;
     ReadHandler fallback_read_;

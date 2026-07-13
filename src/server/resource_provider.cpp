@@ -87,7 +87,7 @@ Result<void> ResourceProvider::add_resource(Resource resource,
     }
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         for (const auto& entry : resources_) {
             if (entry.first.uri == resource.uri) {
                 return Error(ErrorCode::InvalidParams,
@@ -109,7 +109,7 @@ Result<void> ResourceProvider::add_resource(Resource resource,
 Result<void> ResourceProvider::add_resource_template(ResourceTemplate tmpl) {
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         for (const auto& existing : templates_) {
             if (existing.uri_template == tmpl.uri_template) {
                 return Error(ErrorCode::InvalidParams,
@@ -131,7 +131,7 @@ Result<void> ResourceProvider::add_resource_template(ResourceTemplate tmpl) {
 bool ResourceProvider::remove_resource(const std::string& uri) {
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = std::find_if(
             resources_.begin(), resources_.end(),
             [&uri](const auto& entry) { return entry.first.uri == uri; });
@@ -149,22 +149,22 @@ bool ResourceProvider::remove_resource(const std::string& uri) {
 }
 
 std::size_t ResourceProvider::resource_count() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return resources_.size();
 }
 
 std::size_t ResourceProvider::template_count() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return templates_.size();
 }
 
 bool ResourceProvider::has_completions() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return !completions_.empty();
 }
 
 void ResourceProvider::set_read_handler(ReadHandler handler) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     fallback_read_ = std::move(handler);
 }
 
@@ -173,7 +173,7 @@ Result<detail::Page<Resource>> ResourceProvider::list_resources(
     std::vector<Resource> snapshot;
     std::size_t page_size;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         snapshot.reserve(resources_.size());
         for (const auto& entry : resources_) {
             snapshot.push_back(entry.first);
@@ -188,7 +188,7 @@ Result<detail::Page<ResourceTemplate>> ResourceProvider::list_resource_templates
     std::vector<ResourceTemplate> snapshot;
     std::size_t page_size;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         snapshot = templates_;
         page_size = page_size_;
     }
@@ -204,7 +204,7 @@ Result<ReadResourceResult> ResourceProvider::read_resource(
     ReadHandler handler;
     bool template_matched = false;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = std::find_if(
             resources_.begin(), resources_.end(),
             [&uri](const auto& entry) { return entry.first.uri == uri; });
@@ -243,7 +243,7 @@ Result<ReadResourceResult> ResourceProvider::read_resource(
 }
 
 Result<void> ResourceProvider::subscribe(const std::string& uri) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     if (!uri_known_locked(uri)) {
         return Error(ErrorCode::ResourceNotFound, "resource not found: " + uri);
     }
@@ -252,19 +252,19 @@ Result<void> ResourceProvider::subscribe(const std::string& uri) {
 }
 
 bool ResourceProvider::unsubscribe(const std::string& uri) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return subscriptions_.erase(uri) > 0;
 }
 
 bool ResourceProvider::is_subscribed(const std::string& uri) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return subscriptions_.count(uri) > 0;
 }
 
 void ResourceProvider::set_completion(const std::string& uri_template,
                                       const std::string& argument,
                                       CompletionCallback callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     completions_[{uri_template, argument}] = std::move(callback);
 }
 
@@ -273,7 +273,7 @@ std::optional<CompleteResult> ResourceProvider::complete(
     const std::string& value) const {
     CompletionCallback callback;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = completions_.find({uri_template, argument});
         if (it == completions_.end()) {
             return std::nullopt;
@@ -284,12 +284,12 @@ std::optional<CompleteResult> ResourceProvider::complete(
 }
 
 void ResourceProvider::set_page_size(std::size_t page_size) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     page_size_ = page_size == 0 ? 1 : page_size;
 }
 
 void ResourceProvider::set_changed_callback(std::function<void()> callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     changed_callback_ = std::move(callback);
 }
 

@@ -15,22 +15,22 @@ HttpClientTransport::HttpClientTransport(HttpClientOptions options)
 HttpClientTransport::~HttpClientTransport() { disconnect(); }
 
 void HttpClientTransport::set_message_handler(std::function<void(Message)> handler) {
-    std::lock_guard<std::mutex> lock(handler_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
     message_handler_ = std::move(handler);
 }
 void HttpClientTransport::set_error_handler(std::function<void(Error)> handler) {
-    std::lock_guard<std::mutex> lock(handler_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
     error_handler_ = std::move(handler);
 }
 void HttpClientTransport::set_close_handler(std::function<void()> handler) {
-    std::lock_guard<std::mutex> lock(handler_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
     close_handler_ = std::move(handler);
 }
 
 void HttpClientTransport::emit_error(const Error& error) {
     std::function<void(Error)> handler;
     {
-        std::lock_guard<std::mutex> lock(handler_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
         handler = error_handler_;
     }
     if (handler) {
@@ -44,7 +44,7 @@ void HttpClientTransport::emit_close() {
     }
     std::function<void()> handler;
     {
-        std::lock_guard<std::mutex> lock(handler_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
         handler = close_handler_;
     }
     if (handler) {
@@ -53,15 +53,15 @@ void HttpClientTransport::emit_close() {
 }
 
 std::string HttpClientTransport::session_id() const {
-    std::lock_guard<std::mutex> lock(
-        const_cast<std::mutex&>(state_mutex_));
+    std::lock_guard<mcp::sys::mutex> lock(
+        const_cast<mcp::sys::mutex&>(state_mutex_));
     return session_id_;
 }
 
 void HttpClientTransport::send_session_delete() {
     std::string sid;
     {
-        std::lock_guard<std::mutex> lock(state_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
         sid = session_id_;
     }
     if (sid.empty()) {
@@ -99,7 +99,7 @@ void HttpClientTransport::connect() {
         return;
     }
     if (options_.open_sse_stream) {
-        sse_thread_ = std::thread([this] { sse_loop(); });
+        sse_thread_ = mcp::sys::thread([this] { sse_loop(); });
     }
 }
 
@@ -112,7 +112,7 @@ void HttpClientTransport::disconnect() {
         wake_->signal();
     }
     if (sse_thread_.joinable() &&
-        sse_thread_.get_id() != std::this_thread::get_id()) {
+        sse_thread_.get_id() != mcp::sys::this_thread::get_id()) {
         sse_thread_.join();
     }
     wake_.reset();
@@ -132,7 +132,7 @@ void HttpClientTransport::deliver_frame(const std::string& payload) {
     }
     std::function<void(Message)> handler;
     {
-        std::lock_guard<std::mutex> lock(handler_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
         handler = message_handler_;
     }
     if (!handler) {
@@ -171,7 +171,7 @@ void HttpClientTransport::post_payload(const std::string& body) {
         headers.emplace_back("Origin", *options_.origin);
     }
     {
-        std::lock_guard<std::mutex> lock(state_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
         if (!session_id_.empty()) {
             headers.emplace_back("Mcp-Session-Id", session_id_);
         }
@@ -221,7 +221,7 @@ void HttpClientTransport::post_payload(const std::string& body) {
 
     // Capture the server-assigned session id (Mcp-Session-Id).
     if (const auto sid = head.header("mcp-session-id"); !sid.empty()) {
-        std::lock_guard<std::mutex> lock(state_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
         session_id_ = sid;
     }
 
@@ -233,7 +233,7 @@ void HttpClientTransport::post_payload(const std::string& body) {
         pal::close_fd(fd);
         std::string hint;
         {
-            std::lock_guard<std::mutex> lock(state_mutex_);
+            std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
             if (head.status == 404 && !session_id_.empty()) {
                 hint = " (session expired - reinitialize)";
                 session_id_.clear();
@@ -353,7 +353,7 @@ void HttpClientTransport::sse_loop() {
         // Wait retry delay (interruptible by disconnect).
         int delay;
         {
-            std::lock_guard<std::mutex> lock(state_mutex_);
+            std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
             delay = retry_ms_;
         }
         (void)pal::poll_readable(wake_->poll_handle(), nullptr, delay);
@@ -378,7 +378,7 @@ bool HttpClientTransport::run_sse_once() {
         headers.emplace_back("Origin", *options_.origin);
     }
     {
-        std::lock_guard<std::mutex> lock(state_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
         if (!last_event_id_.empty()) {
             // Resume after the last delivered event (FR-TRAN-009).
             headers.emplace_back("Last-Event-ID", last_event_id_);
@@ -436,11 +436,11 @@ bool HttpClientTransport::run_sse_once() {
     for (;;) {
         for (const auto& event : events) {
             if (event.retry_ms) {
-                std::lock_guard<std::mutex> lock(state_mutex_);
+                std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
                 retry_ms_ = *event.retry_ms;  // server retry hint (FR-TRAN-007)
             }
             if (event.id) {
-                std::lock_guard<std::mutex> lock(state_mutex_);
+                std::lock_guard<mcp::sys::mutex> lock(state_mutex_);
                 last_event_id_ = *event.id;
             }
             deliver_frame(event.data);

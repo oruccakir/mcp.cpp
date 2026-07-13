@@ -2,7 +2,7 @@
 
 #include <functional>
 #include <map>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -82,7 +82,7 @@ public:
     void set_changed_callback(std::function<void()> callback);
 
 private:
-    mutable std::mutex mutex_;
+    mutable mcp::sys::mutex mutex_;
     std::vector<std::pair<Prompt, PromptHandler>> prompts_;
     std::map<std::pair<std::string, std::string>, CompletionCallback> completions_;
     std::size_t page_size_ = 100;

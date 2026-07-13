@@ -23,4 +23,9 @@ if(MCP_BUILD_TESTS)
     endif()
 endif()
 
-find_package(Threads REQUIRED)
+# Host threading via pthreads. On VxWorks the kernel provides taskLib/semLib
+# built in (no pthread lib — find_package(Threads) fails there with
+# CMAKE_HAVE_LIBC_PTHREAD not found), and mcp::sys uses native tasks instead.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "VxWorks")
+    find_package(Threads REQUIRED)
+endif()

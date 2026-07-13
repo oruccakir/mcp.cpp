@@ -25,7 +25,7 @@ Result<void> RootsProvider::add_root(Root root) {
     }
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         for (const auto& existing : roots_) {
             if (existing.uri == root.uri) {
                 return Error(ErrorCode::InvalidParams,
@@ -46,7 +46,7 @@ Result<void> RootsProvider::add_root(Root root) {
 bool RootsProvider::remove_root(const std::string& uri) {
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = std::find_if(
             roots_.begin(), roots_.end(),
             [&uri](const Root& root) { return root.uri == uri; });
@@ -63,17 +63,17 @@ bool RootsProvider::remove_root(const std::string& uri) {
 }
 
 std::vector<Root> RootsProvider::list_roots() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return roots_;
 }
 
 std::size_t RootsProvider::size() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return roots_.size();
 }
 
 void RootsProvider::set_changed_callback(std::function<void()> callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     changed_callback_ = std::move(callback);
 }
 

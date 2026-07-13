@@ -5,7 +5,7 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <string>
 #include <vector>
 
@@ -78,7 +78,7 @@ private:
     std::atomic<std::uint16_t> bound_port_{0};
     std::atomic<bool> close_emitted_{false};
 
-    std::mutex handler_mutex_;
+    mcp::sys::mutex handler_mutex_;
     std::function<void(Message)> message_handler_;
     std::function<void(Error)> error_handler_;
     std::function<void()> close_handler_;

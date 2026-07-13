@@ -1,7 +1,7 @@
 #pragma once
 
 #include <functional>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,7 +35,7 @@ public:
     void set_changed_callback(std::function<void()> callback);
 
 private:
-    mutable std::mutex mutex_;
+    mutable mcp::sys::mutex mutex_;
     std::vector<Root> roots_;
     std::function<void()> changed_callback_;
 };

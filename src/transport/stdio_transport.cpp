@@ -35,7 +35,7 @@ void StdioTransport::connect() {
     }
     MCP_LOG(info, "stdio transport connected (in fd " << in_fd_ << ", out fd "
                                                       << out_fd_ << ")");
-    read_thread_ = std::thread([this] { read_loop(); });
+    read_thread_ = mcp::sys::thread([this] { read_loop(); });
 }
 
 void StdioTransport::disconnect() {
@@ -44,7 +44,7 @@ void StdioTransport::disconnect() {
         wake_->signal();
     }
     if (read_thread_.joinable() &&
-        read_thread_.get_id() != std::this_thread::get_id()) {
+        read_thread_.get_id() != mcp::sys::this_thread::get_id()) {
         read_thread_.join();
     }
     wake_.reset();

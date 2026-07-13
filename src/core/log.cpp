@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <utility>
 
 namespace mcp {
@@ -17,7 +17,7 @@ namespace {
 
 using Sink = std::function<void(LogLevel, const char*, const std::string&)>;
 
-std::mutex g_mutex;  // serializes sink swaps and line emission
+mcp::sys::mutex g_mutex;  // serializes sink swaps and line emission
 Sink g_sink;
 std::atomic<int> g_level{-1};  // -1 = not yet initialized from env
 
@@ -59,7 +59,7 @@ const char* level_name(LogLevel level) {
 }  // namespace
 
 void set_log_sink(Sink sink) {
-    std::lock_guard<std::mutex> lock(g_mutex);
+    std::lock_guard<mcp::sys::mutex> lock(g_mutex);
     g_sink = std::move(sink);
 }
 
@@ -74,7 +74,7 @@ bool enabled(LogLevel level) {
 }
 
 void emit(LogLevel level, const char* component, const std::string& line) {
-    std::lock_guard<std::mutex> lock(g_mutex);
+    std::lock_guard<mcp::sys::mutex> lock(g_mutex);
     if (g_sink) {
         g_sink(level, component, line);
         return;

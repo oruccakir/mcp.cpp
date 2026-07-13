@@ -3,7 +3,7 @@
 #include <mcp/core/session.hpp>
 
 #include <algorithm>
-#include <future>
+#include <mcp/sys/threading.hpp>
 
 #include <mcp/log.hpp>
 #include <mcp/methods.hpp>
@@ -41,7 +41,7 @@ Session::Session(std::shared_ptr<Transport> transport)
         [this](Error error) { on_transport_error(error); });
     transport_->set_close_handler([this] { handle_close(); });
 
-    timer_thread_ = std::thread([this] { timer_loop(); });
+    timer_thread_ = mcp::sys::thread([this] { timer_loop(); });
 }
 
 Session::~Session() {
@@ -54,7 +54,7 @@ Session::~Session() {
     transport_->disconnect();
 #endif
     {
-        std::lock_guard<std::mutex> lock(timer_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(timer_mutex_);
         stop_timer_ = true;
     }
     timer_cv_.notify_all();
@@ -88,7 +88,7 @@ RequestId Session::send_request(const std::string& method,
 
     const bool timed = options.timeout && options.timeout->count() > 0;
     if (timed || (options.progress_token && options.on_progress)) {
-        std::lock_guard<std::mutex> lock(timer_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(timer_mutex_);
         if (timed) {
             deadlines_[id] = Deadline{
                 std::chrono::steady_clock::now() + *options.timeout,
@@ -108,13 +108,12 @@ RequestId Session::send_request(const std::string& method,
 Result<json> Session::send_request_sync(const std::string& method,
                                         std::optional<json> params,
                                         RequestOptions options) {
-    auto promise = std::make_shared<std::promise<Result<json>>>();
-    auto future = promise->get_future();
+    auto slot = std::make_shared<mcp::sys::OneShot<Result<json>>>();
     send_request(
         method, std::move(params),
-        [promise](Result<json> result) { promise->set_value(std::move(result)); },
+        [slot](Result<json> result) { slot->set(std::move(result)); },
         std::move(options));
-    return future.get();
+    return slot->get();
 }
 
 void Session::send_notification(const std::string& method,
@@ -143,17 +142,17 @@ void Session::send_progress(const ProgressToken& token, double progress,
 }
 
 bool Session::is_cancelled(const RequestId& id) const {
-    std::lock_guard<std::mutex> lock(cancelled_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(cancelled_mutex_);
     return cancelled_incoming_.count(id) > 0;
 }
 
 void Session::set_close_callback(std::function<void()> callback) {
-    std::lock_guard<std::mutex> lock(callback_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(callback_mutex_);
     close_callback_ = std::move(callback);
 }
 
 void Session::set_error_callback(std::function<void(const Error&)> callback) {
-    std::lock_guard<std::mutex> lock(callback_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(callback_mutex_);
     error_callback_ = std::move(callback);
 }
 
@@ -164,7 +163,7 @@ std::optional<Error> Session::check_incoming_request(const JsonRpcRequest&) {
 void Session::on_transport_error(const Error& error) {
     std::function<void(const Error&)> callback;
     {
-        std::lock_guard<std::mutex> lock(callback_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(callback_mutex_);
         callback = error_callback_;
     }
     if (callback) {
@@ -175,7 +174,7 @@ void Session::on_transport_error(const Error& error) {
 void Session::handle_message(Message message) {
     if (const auto* request = std::get_if<JsonRpcRequest>(&message)) {
         if (request->method == methods::kInitialize) {
-            std::lock_guard<std::mutex> lock(cancelled_mutex_);
+            std::lock_guard<mcp::sys::mutex> lock(cancelled_mutex_);
             protected_request_id_ = request->id;
         }
         MCP_LOG(debug, "--> " << request->method << " (id "
@@ -215,7 +214,7 @@ void Session::handle_message(Message message) {
 void Session::handle_close() {
     set_state(SessionState::Shutdown);
     {
-        std::lock_guard<std::mutex> lock(timer_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(timer_mutex_);
         deadlines_.clear();
         progress_callbacks_.clear();
     }
@@ -224,7 +223,7 @@ void Session::handle_close() {
 
     std::function<void()> callback;
     {
-        std::lock_guard<std::mutex> lock(callback_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(callback_mutex_);
         callback = close_callback_;
     }
     if (callback) {
@@ -244,7 +243,7 @@ void Session::handle_progress(const std::optional<json>& params) {
 
     std::function<void(const ProgressNotification&)> callback;
     {
-        std::lock_guard<std::mutex> lock(timer_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(timer_mutex_);
         for (auto& [id, deadline] : deadlines_) {
             if (deadline.progress_token &&
                 *deadline.progress_token == note.progress_token) {
@@ -271,7 +270,7 @@ void Session::handle_cancelled(const std::optional<json>& params) {
     if (!parsed) {
         return;
     }
-    std::lock_guard<std::mutex> lock(cancelled_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(cancelled_mutex_);
     if (protected_request_id_ && parsed.value().request_id == *protected_request_id_) {
         return;  // initialize MUST NOT be cancelled (FR-CORE-015).
     }
@@ -282,7 +281,7 @@ void Session::handle_cancelled(const std::optional<json>& params) {
 }
 
 void Session::clear_tracking(const RequestId& id) {
-    std::lock_guard<std::mutex> lock(timer_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(timer_mutex_);
     if (auto it = deadlines_.find(id); it != deadlines_.end()) {
         if (it->second.progress_token) {
             progress_callbacks_.erase(*it->second.progress_token);
@@ -293,7 +292,7 @@ void Session::clear_tracking(const RequestId& id) {
 }
 
 void Session::timer_loop() {
-    std::unique_lock<std::mutex> lock(timer_mutex_);
+    std::unique_lock<mcp::sys::mutex> lock(timer_mutex_);
     while (!stop_timer_) {
         if (deadlines_.empty()) {
             timer_cv_.wait(lock);
@@ -351,7 +350,7 @@ ServerSession::ServerSession(std::shared_ptr<Transport> transport,
                 }
                 // Sessionless-HTTP mode: a fresh initialize starts a new
                 // logical session on this transport.
-                std::lock_guard<std::mutex> lock(peer_mutex_);
+                std::lock_guard<mcp::sys::mutex> lock(peer_mutex_);
                 client_info_.reset();
                 client_capabilities_.reset();
             }
@@ -371,7 +370,7 @@ ServerSession::ServerSession(std::shared_ptr<Transport> transport,
             parsed = params->get<InitializeParams>();
 #endif
             {
-                std::lock_guard<std::mutex> lock(peer_mutex_);
+                std::lock_guard<mcp::sys::mutex> lock(peer_mutex_);
                 client_info_ = parsed.client_info;
                 client_capabilities_ = parsed.capabilities;
             }
@@ -405,12 +404,12 @@ ServerSession::ServerSession(std::shared_ptr<Transport> transport,
 }
 
 std::optional<Implementation> ServerSession::client_info() const {
-    std::lock_guard<std::mutex> lock(peer_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(peer_mutex_);
     return client_info_;
 }
 
 std::optional<ClientCapabilities> ServerSession::client_capabilities() const {
-    std::lock_guard<std::mutex> lock(peer_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(peer_mutex_);
     return client_capabilities_;
 }
 
@@ -505,7 +504,7 @@ Result<InitializeResult> ClientSession::initialize() {
     }
 
     {
-        std::lock_guard<std::mutex> lock(peer_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(peer_mutex_);
         server_info_ = result.server_info;
         server_capabilities_ = result.capabilities;
     }
@@ -515,12 +514,12 @@ Result<InitializeResult> ClientSession::initialize() {
 }
 
 std::optional<Implementation> ClientSession::server_info() const {
-    std::lock_guard<std::mutex> lock(peer_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(peer_mutex_);
     return server_info_;
 }
 
 std::optional<ServerCapabilities> ClientSession::server_capabilities() const {
-    std::lock_guard<std::mutex> lock(peer_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(peer_mutex_);
     return server_capabilities_;
 }
 

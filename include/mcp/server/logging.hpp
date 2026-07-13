@@ -2,7 +2,7 @@
 
 #include <atomic>
 #include <functional>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <optional>
 #include <string>
 
@@ -45,7 +45,7 @@ public:
 
 private:
     std::atomic<LoggingLevel> level_{LoggingLevel::Info};
-    std::mutex mutex_;
+    mcp::sys::mutex mutex_;
     Emitter emitter_;
 };
 

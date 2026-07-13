@@ -46,7 +46,7 @@ bool HttpEndpoint::start(std::string& error) {
     bound_port_.store(pal::tcp_local_port(listen_fd_));
     MCP_LOG(info, "listening on " << options_.host << ":" << bound_port_.load()
                                   << " (path " << options_.path << ")");
-    accept_thread_ = std::thread([this] { accept_loop(); });
+    accept_thread_ = mcp::sys::thread([this] { accept_loop(); });
     return true;
 }
 
@@ -57,7 +57,7 @@ void HttpEndpoint::stop() {
     wake_.signal();
     pal::shutdown_fd(listen_fd_);
     {
-        std::lock_guard<std::mutex> lock(conn_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(conn_mutex_);
         for (const pal::fd_t fd : conn_fds_) {
             pal::shutdown_fd(fd);
         }
@@ -65,9 +65,9 @@ void HttpEndpoint::stop() {
     if (accept_thread_.joinable()) {
         accept_thread_.join();
     }
-    std::vector<std::thread> threads;
+    std::vector<mcp::sys::thread> threads;
     {
-        std::lock_guard<std::mutex> lock(conn_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(conn_mutex_);
         threads.swap(conn_threads_);
     }
     for (auto& thread : threads) {
@@ -76,7 +76,7 @@ void HttpEndpoint::stop() {
         }
     }
     {
-        std::lock_guard<std::mutex> lock(conn_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(conn_mutex_);
         for (pal::fd_t fd : conn_fds_) {
             pal::close_fd(fd);
         }
@@ -95,7 +95,7 @@ void HttpEndpoint::accept_loop() {
         if (fd == pal::kInvalidFd) {
             continue;
         }
-        std::lock_guard<std::mutex> lock(conn_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(conn_mutex_);
         if (!running_.load()) {
             pal::fd_t doomed = fd;
             pal::close_fd(doomed);
@@ -219,7 +219,7 @@ void HttpEndpoint::handle_connection(std::intptr_t fd) {
     // Close eagerly so dropped SSE clients see EOF and can reconnect
     // (FR-TRAN-007); stop() only owns fds still in the list.
     pal::shutdown_fd(fd);
-    std::lock_guard<std::mutex> lock(conn_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(conn_mutex_);
     const auto it = std::find(conn_fds_.begin(), conn_fds_.end(), fd);
     if (it != conn_fds_.end()) {
         conn_fds_.erase(it);

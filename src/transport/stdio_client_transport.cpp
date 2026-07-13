@@ -16,7 +16,7 @@ StdioClientTransport::~StdioClientTransport() { disconnect(); }
 
 void StdioClientTransport::set_stderr_handler(
     std::function<void(std::string)> handler) {
-    std::lock_guard<std::mutex> lock(stderr_handler_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(stderr_handler_mutex_);
     stderr_handler_ = std::move(handler);
 }
 
@@ -56,8 +56,8 @@ void StdioClientTransport::connect() {
     stdout_fd_ = static_cast<int>(process.stdout_fd);
     stderr_fd_ = static_cast<int>(process.stderr_fd);
 
-    stdout_thread_ = std::thread([this] { stdout_loop(); });
-    stderr_thread_ = std::thread([this] { stderr_loop(); });
+    stdout_thread_ = mcp::sys::thread([this] { stdout_loop(); });
+    stderr_thread_ = mcp::sys::thread([this] { stderr_loop(); });
 }
 
 void StdioClientTransport::write_line(const std::string& line) {
@@ -99,7 +99,7 @@ void StdioClientTransport::stderr_loop() {
     while (reader.next(line) == detail::LineReader::Status::Line) {
         std::function<void(std::string)> handler;
         {
-            std::lock_guard<std::mutex> lock(stderr_handler_mutex_);
+            std::lock_guard<mcp::sys::mutex> lock(stderr_handler_mutex_);
             handler = stderr_handler_;
         }
         if (handler) {
@@ -143,7 +143,7 @@ void StdioClientTransport::disconnect() {
         }
     }
 
-    const auto self = std::this_thread::get_id();
+    const auto self = mcp::sys::this_thread::get_id();
     if (stdout_thread_.joinable() && stdout_thread_.get_id() != self) {
         stdout_thread_.join();
     }

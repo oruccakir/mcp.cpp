@@ -4,10 +4,9 @@
 // sessionless HttpServerTransport and the multi-session HttpSessionServer.
 
 #include <cstdint>
-#include <condition_variable>
+#include <mcp/sys/threading.hpp>
 #include <deque>
 #include <functional>
-#include <mutex>
 #include <optional>
 #include <string>
 
@@ -44,8 +43,8 @@ private:
         std::string data;
     };
 
-    std::mutex mutex_;
-    std::condition_variable cv_;
+    mcp::sys::mutex mutex_;
+    mcp::sys::condition_variable cv_;
     bool running_ = true;
     std::deque<Item> ring_;
     std::uint64_t next_event_id_ = 1;

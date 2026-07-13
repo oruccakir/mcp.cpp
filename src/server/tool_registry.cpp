@@ -57,7 +57,7 @@ Result<void> ToolRegistry::register_tool(Tool tool, ToolHandler handler) {
     }
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         for (const auto& entry : tools_) {
             if (entry.first.name == tool.name) {
                 return Error(ErrorCode::InvalidParams,
@@ -79,7 +79,7 @@ Result<void> ToolRegistry::register_tool(Tool tool, ToolHandler handler) {
 bool ToolRegistry::remove_tool(const std::string& name) {
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = std::find_if(
             tools_.begin(), tools_.end(),
             [&name](const auto& entry) { return entry.first.name == name; });
@@ -97,7 +97,7 @@ bool ToolRegistry::remove_tool(const std::string& name) {
 }
 
 std::size_t ToolRegistry::size() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return tools_.size();
 }
 
@@ -106,7 +106,7 @@ Result<detail::Page<Tool>> ToolRegistry::list_tools(
     std::vector<Tool> snapshot;
     std::size_t page_size;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         snapshot.reserve(tools_.size());
         for (const auto& entry : tools_) {
             snapshot.push_back(entry.first);
@@ -121,7 +121,7 @@ Result<CallToolResult> ToolRegistry::call_tool(const std::string& name,
     json input_schema;
     ToolHandler handler;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = std::find_if(
             tools_.begin(), tools_.end(),
             [&name](const auto& entry) { return entry.first.name == name; });
@@ -153,12 +153,12 @@ Result<CallToolResult> ToolRegistry::call_tool(const std::string& name,
 }
 
 void ToolRegistry::set_page_size(std::size_t page_size) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     page_size_ = page_size == 0 ? 1 : page_size;
 }
 
 void ToolRegistry::set_changed_callback(std::function<void()> callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     changed_callback_ = std::move(callback);
 }
 

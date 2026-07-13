@@ -5,7 +5,7 @@
 #include <atomic>
 #include <cstdio>
 #include <map>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <random>
 #include <vector>
 
@@ -51,7 +51,7 @@ public:
         channel_.shutdown();
         std::function<void()> handler;
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard<mcp::sys::mutex> lock(mutex_);
             handler = close_handler_;
         }
         if (handler) {
@@ -72,22 +72,22 @@ public:
     }
 
     void set_message_handler(std::function<void(Message)> handler) override {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         message_handler_ = std::move(handler);
     }
     void set_error_handler(std::function<void(Error)> handler) override {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         error_handler_ = std::move(handler);
     }
     void set_close_handler(std::function<void()> handler) override {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         close_handler_ = std::move(handler);
     }
 
     void deliver(Message message) {
         std::function<void(Message)> handler;
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard<mcp::sys::mutex> lock(mutex_);
             handler = message_handler_;
         }
         if (handler) {
@@ -98,7 +98,7 @@ public:
 private:
     SseChannel channel_;
     std::atomic<bool> closed_{false};
-    std::mutex mutex_;
+    mcp::sys::mutex mutex_;
     std::function<void(Message)> message_handler_;
     std::function<void(Error)> error_handler_;
     std::function<void()> close_handler_;
@@ -115,14 +115,14 @@ public:
     using EntryPtr = std::shared_ptr<Entry>;
 
     EntryPtr create(const std::string& id, EntryPtr entry) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         entries_[id] = entry;
         return entry;
     }
 
     /// Looks up and touches; nullptr when unknown.
     EntryPtr find(const std::string& id) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = entries_.find(id);
         if (it == entries_.end()) {
             return nullptr;
@@ -132,7 +132,7 @@ public:
     }
 
     EntryPtr remove(const std::string& id) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = entries_.find(id);
         if (it == entries_.end()) {
             return nullptr;
@@ -148,7 +148,7 @@ public:
             return evicted;
         }
         const auto cutoff = std::chrono::steady_clock::now() - timeout;
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         for (auto it = entries_.begin(); it != entries_.end();) {
             if (it->second->last_activity < cutoff) {
                 evicted.push_back(std::move(it->second));
@@ -161,7 +161,7 @@ public:
     }
 
     std::vector<EntryPtr> remove_all() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         std::vector<EntryPtr> all;
         all.reserve(entries_.size());
         for (auto& [id, entry] : entries_) {
@@ -172,12 +172,12 @@ public:
     }
 
     std::size_t size() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         return entries_.size();
     }
 
 private:
-    mutable std::mutex mutex_;
+    mutable mcp::sys::mutex mutex_;
     std::map<std::string, EntryPtr> entries_;
 };
 

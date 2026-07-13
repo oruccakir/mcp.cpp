@@ -7,9 +7,8 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <mcp/transport/http_server_transport.hpp>  // HttpServerOptions
@@ -57,10 +56,10 @@ private:
     pal::fd_t listen_fd_ = pal::kInvalidFd;
     pal::WakeEvent wake_;
     std::atomic<std::uint16_t> bound_port_{0};
-    std::thread accept_thread_;
+    mcp::sys::thread accept_thread_;
 
-    std::mutex conn_mutex_;
-    std::vector<std::thread> conn_threads_;
+    mcp::sys::mutex conn_mutex_;
+    std::vector<mcp::sys::thread> conn_threads_;
     std::vector<pal::fd_t> conn_fds_;
 };
 
