@@ -2,7 +2,7 @@
 
 #include <atomic>
 #include <memory>
-#include <thread>
+#include <mcp/sys/threading.hpp>
 
 #include <mcp/transport/line_transport.hpp>
 
@@ -40,7 +40,7 @@ private:
     bool owns_fds_;
     std::unique_ptr<pal::WakeEvent> wake_;
     std::atomic<bool> running_{false};
-    std::thread read_thread_;
+    mcp::sys::thread read_thread_;
 };
 
 }  // namespace mcp

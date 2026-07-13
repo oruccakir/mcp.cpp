@@ -1,7 +1,7 @@
 #pragma once
 
 #include <functional>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <string>
 #include <vector>
 
@@ -36,8 +36,8 @@ protected:
 private:
     void send_line(const std::string& line);
 
-    std::mutex write_mutex_;
-    std::mutex handler_mutex_;
+    mcp::sys::mutex write_mutex_;
+    mcp::sys::mutex handler_mutex_;
     std::function<void(Message)> message_handler_;
     std::function<void(Error)> error_handler_;
     std::function<void()> close_handler_;

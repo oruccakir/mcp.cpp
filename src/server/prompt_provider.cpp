@@ -61,7 +61,7 @@ Result<void> PromptProvider::add_prompt(Prompt prompt, PromptHandler handler) {
     }
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         for (const auto& entry : prompts_) {
             if (entry.first.name == prompt.name) {
                 return Error(ErrorCode::InvalidParams,
@@ -83,7 +83,7 @@ Result<void> PromptProvider::add_prompt(Prompt prompt, PromptHandler handler) {
 bool PromptProvider::remove_prompt(const std::string& name) {
     std::function<void()> changed;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = std::find_if(
             prompts_.begin(), prompts_.end(),
             [&name](const auto& entry) { return entry.first.name == name; });
@@ -100,12 +100,12 @@ bool PromptProvider::remove_prompt(const std::string& name) {
 }
 
 std::size_t PromptProvider::size() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return prompts_.size();
 }
 
 bool PromptProvider::has_completions() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     return !completions_.empty();
 }
 
@@ -114,7 +114,7 @@ Result<detail::Page<Prompt>> PromptProvider::list_prompts(
     std::vector<Prompt> snapshot;
     std::size_t page_size;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         snapshot.reserve(prompts_.size());
         for (const auto& entry : prompts_) {
             snapshot.push_back(entry.first);
@@ -129,7 +129,7 @@ Result<GetPromptResult> PromptProvider::get_prompt(const std::string& name,
     Prompt prompt;
     PromptHandler handler;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = std::find_if(
             prompts_.begin(), prompts_.end(),
             [&name](const auto& entry) { return entry.first.name == name; });
@@ -168,7 +168,7 @@ Result<GetPromptResult> PromptProvider::get_prompt(const std::string& name,
 void PromptProvider::set_completion(const std::string& prompt_name,
                                     const std::string& argument,
                                     CompletionCallback callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     completions_[{prompt_name, argument}] = std::move(callback);
 }
 
@@ -177,7 +177,7 @@ std::optional<CompleteResult> PromptProvider::complete(
     const std::string& value) const {
     CompletionCallback callback;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         const auto it = completions_.find({prompt_name, argument});
         if (it == completions_.end()) {
             return std::nullopt;
@@ -188,12 +188,12 @@ std::optional<CompleteResult> PromptProvider::complete(
 }
 
 void PromptProvider::set_page_size(std::size_t page_size) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     page_size_ = page_size == 0 ? 1 : page_size;
 }
 
 void PromptProvider::set_changed_callback(std::function<void()> callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     changed_callback_ = std::move(callback);
 }
 

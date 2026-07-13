@@ -3,7 +3,7 @@
 #include <mcp/server/server.hpp>
 
 #include <algorithm>
-#include <future>
+#include <mcp/sys/threading.hpp>
 #include <vector>
 
 #include <mcp/log.hpp>
@@ -111,7 +111,7 @@ void Server::attach(ServerSession& session) {
                                        ? ", completions"
                                        : ""));
     {
-        std::lock_guard<std::mutex> lock(session_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(session_mutex_);
         if (std::find(sessions_.begin(), sessions_.end(), &session) ==
             sessions_.end()) {
             sessions_.push_back(&session);
@@ -280,7 +280,7 @@ void Server::attach(ServerSession& session) {
 }
 
 void Server::detach(ServerSession& session) {
-    std::lock_guard<std::mutex> lock(session_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(session_mutex_);
     sessions_.erase(
         std::remove(sessions_.begin(), sessions_.end(), &session),
         sessions_.end());
@@ -290,22 +290,22 @@ int Server::run(std::shared_ptr<Transport> transport) {
     ServerSession session(std::move(transport), server_options());
     attach(session);
 
-    std::promise<void> closed;
-    session.set_close_callback([&closed] { closed.set_value(); });
+    mcp::sys::OneShot<void> closed;
+    session.set_close_callback([&closed] { closed.set(); });
     session.connect();
-    closed.get_future().wait();
+    closed.get();
 
     detach(session);
     return 0;
 }
 
 ServerSession* Server::session() {
-    std::lock_guard<std::mutex> lock(session_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(session_mutex_);
     return sessions_.size() == 1 ? sessions_.front() : nullptr;
 }
 
 std::vector<ServerSession*> Server::sessions() {
-    std::lock_guard<std::mutex> lock(session_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(session_mutex_);
     return sessions_;
 }
 
@@ -319,7 +319,7 @@ void Server::notify_resource_updated(const std::string& uri) {
 void Server::send_notification_if_operating(const std::string& method,
                                             std::optional<json> params) {
     // Broadcast to every attached Operating session (multi-session HTTP).
-    std::lock_guard<std::mutex> lock(session_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(session_mutex_);
     for (ServerSession* session : sessions_) {
         if (session->state() == SessionState::Operating) {
             session->send_notification(method, params);

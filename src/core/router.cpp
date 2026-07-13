@@ -28,7 +28,7 @@ Handler match_wildcard(const std::vector<std::pair<std::string, Handler>>& patte
 
 void MessageRouter::set_request_handler(const std::string& method,
                                         RequestHandler handler) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     if (is_wildcard(method)) {
         const std::string prefix = method.substr(0, method.size() - 1);
         wildcard_request_handlers_.emplace_back(prefix, std::move(handler));
@@ -39,7 +39,7 @@ void MessageRouter::set_request_handler(const std::string& method,
 
 void MessageRouter::set_notification_handler(const std::string& method,
                                              NotificationHandler handler) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     if (is_wildcard(method)) {
         const std::string prefix = method.substr(0, method.size() - 1);
         wildcard_notification_handlers_.emplace_back(prefix, std::move(handler));
@@ -54,7 +54,7 @@ bool MessageRouter::has_request_handler(const std::string& method) const {
 
 MessageRouter::RequestHandler MessageRouter::find_request_handler(
     const std::string& method) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     if (auto it = request_handlers_.find(method); it != request_handlers_.end()) {
         return it->second;
     }
@@ -63,7 +63,7 @@ MessageRouter::RequestHandler MessageRouter::find_request_handler(
 
 MessageRouter::NotificationHandler MessageRouter::find_notification_handler(
     const std::string& method) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     if (auto it = notification_handlers_.find(method);
         it != notification_handlers_.end()) {
         return it->second;
@@ -72,13 +72,13 @@ MessageRouter::NotificationHandler MessageRouter::find_notification_handler(
 }
 
 void MessageRouter::register_pending(const RequestId& id, ResponseCallback callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     pending_[id] = std::move(callback);
 }
 
 std::optional<MessageRouter::ResponseCallback> MessageRouter::take_pending(
     const RequestId& id) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     auto it = pending_.find(id);
     if (it == pending_.end()) {
         return std::nullopt;
@@ -100,7 +100,7 @@ bool MessageRouter::fail_pending(const RequestId& id, const Error& error) {
 void MessageRouter::fail_all_pending(const Error& error) {
     std::unordered_map<RequestId, ResponseCallback> pending;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         pending.swap(pending_);
     }
     for (auto& [id, callback] : pending) {

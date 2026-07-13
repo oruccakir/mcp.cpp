@@ -1,7 +1,7 @@
 #pragma once
 
 #include <functional>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -50,7 +50,7 @@ private:
     RequestHandler find_request_handler(const std::string& method) const;
     NotificationHandler find_notification_handler(const std::string& method) const;
 
-    mutable std::mutex mutex_;
+    mutable mcp::sys::mutex mutex_;
     std::unordered_map<std::string, RequestHandler> request_handlers_;
     std::unordered_map<std::string, NotificationHandler> notification_handlers_;
     std::vector<std::pair<std::string, RequestHandler>> wildcard_request_handlers_;

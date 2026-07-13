@@ -13,22 +13,22 @@ HttpServerTransport::HttpServerTransport(HttpServerOptions options)
 HttpServerTransport::~HttpServerTransport() { disconnect(); }
 
 void HttpServerTransport::set_message_handler(std::function<void(Message)> handler) {
-    std::lock_guard<std::mutex> lock(handler_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
     message_handler_ = std::move(handler);
 }
 void HttpServerTransport::set_error_handler(std::function<void(Error)> handler) {
-    std::lock_guard<std::mutex> lock(handler_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
     error_handler_ = std::move(handler);
 }
 void HttpServerTransport::set_close_handler(std::function<void()> handler) {
-    std::lock_guard<std::mutex> lock(handler_mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
     close_handler_ = std::move(handler);
 }
 
 void HttpServerTransport::emit_error(const Error& error) {
     std::function<void(Error)> handler;
     {
-        std::lock_guard<std::mutex> lock(handler_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
         handler = error_handler_;
     }
     if (handler) {
@@ -69,7 +69,7 @@ void HttpServerTransport::disconnect() {
     if (!close_emitted_.exchange(true)) {
         std::function<void()> handler;
         {
-            std::lock_guard<std::mutex> lock(handler_mutex_);
+            std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
             handler = close_handler_;
         }
         if (handler) {
@@ -111,7 +111,7 @@ void HttpServerTransport::handle_request(const detail::HttpHead& head,
 
     std::function<void(Message)> handler;
     {
-        std::lock_guard<std::mutex> lock(handler_mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(handler_mutex_);
         handler = message_handler_;
     }
 

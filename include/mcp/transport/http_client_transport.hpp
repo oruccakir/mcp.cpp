@@ -5,10 +5,9 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
+#include <mcp/sys/threading.hpp>
 #include <optional>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <mcp/transport/transport.hpp>
@@ -78,14 +77,14 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> close_emitted_{false};
     std::unique_ptr<pal::WakeEvent> wake_;
-    std::thread sse_thread_;
+    mcp::sys::thread sse_thread_;
 
-    std::mutex state_mutex_;
+    mcp::sys::mutex state_mutex_;
     std::string last_event_id_;
     std::string session_id_;
     int retry_ms_;
 
-    std::mutex handler_mutex_;
+    mcp::sys::mutex handler_mutex_;
     std::function<void(Message)> message_handler_;
     std::function<void(Error)> error_handler_;
     std::function<void()> close_handler_;

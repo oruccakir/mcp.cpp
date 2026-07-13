@@ -13,7 +13,7 @@ SseChannel::SseChannel(std::size_t replay_buffer_size, int retry_ms)
 
 void SseChannel::enqueue(const std::string& payload) {
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         if (!running_) {
             return;
         }
@@ -31,7 +31,7 @@ void SseChannel::attach_stream(std::intptr_t fd, const std::string& last_event_i
     std::uint64_t cursor;
     std::uint64_t last_assigned;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         if (!running_) {
             return;
         }
@@ -71,7 +71,7 @@ void SseChannel::attach_stream(std::intptr_t fd, const std::string& last_event_i
     for (;;) {
         std::vector<Item> pending;
         {
-            std::unique_lock<std::mutex> lock(mutex_);
+            std::unique_lock<mcp::sys::mutex> lock(mutex_);
             cv_.wait(lock, [&] {
                 return !running_ || stream_generation_ != my_generation ||
                        (!ring_.empty() && ring_.back().id >= cursor);
@@ -105,7 +105,7 @@ void SseChannel::attach_stream(std::intptr_t fd, const std::string& last_event_i
 
 void SseChannel::shutdown() {
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         running_ = false;
     }
     cv_.notify_all();

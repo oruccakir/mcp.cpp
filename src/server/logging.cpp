@@ -31,7 +31,7 @@ std::optional<LoggingLevel> logging_level_from_string(const std::string& name) {
 }
 
 void Logger::set_emitter(Emitter emitter) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<mcp::sys::mutex> lock(mutex_);
     emitter_ = std::move(emitter);
 }
 
@@ -42,7 +42,7 @@ void Logger::log(LoggingLevel level, json data,
     }
     Emitter emitter;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<mcp::sys::mutex> lock(mutex_);
         emitter = emitter_;
     }
     if (!emitter) {

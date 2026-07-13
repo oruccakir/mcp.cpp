@@ -4,12 +4,17 @@
 if(CMAKE_SYSTEM_NAME STREQUAL "VxWorks")
     # VxWorks 7 RTPs: POSIX io/net, but no fork/exec — the process module
     # (and with it the stdio client transport) is compiled out.
+    # VxWorks 7 (RTP + DKM): POSIX io/net, native task/semaphore threading
+    # (kernel mode has no pthreads), no fork/exec — the process module (and
+    # the stdio client transport) is compiled out.
     set(MCP_PAL_BACKEND "vxworks")
     set(MCP_PAL_SOURCES
         platform/vxworks/io.cpp
         platform/vxworks/net.cpp
+        platform/vxworks/threading.cpp
     )
     set(MCP_PAL_HAS_PROCESS OFF)
+    set(MCP_SYS_THREADING "vxworks-tasks")
 elseif(WIN32)
     set(MCP_PAL_BACKEND "win32")
     set(MCP_PAL_SOURCES
@@ -18,6 +23,7 @@ elseif(WIN32)
         platform/win32/process.cpp
     )
     set(MCP_PAL_HAS_PROCESS ON)
+    set(MCP_SYS_THREADING "std")
 elseif(UNIX)
     set(MCP_PAL_BACKEND "posix")
     set(MCP_PAL_SOURCES
@@ -26,6 +32,7 @@ elseif(UNIX)
         platform/posix/process.cpp
     )
     set(MCP_PAL_HAS_PROCESS ON)
+    set(MCP_SYS_THREADING "std")
 else()
     message(FATAL_ERROR "No PAL backend for this platform")
 endif()
@@ -43,6 +50,7 @@ message(STATUS "mcp.cpp ${PROJECT_VERSION}")
 message(STATUS "  target platform : ${CMAKE_SYSTEM_NAME} (${CMAKE_SYSTEM_PROCESSOR}), ${MCP_BUILD_KIND}")
 message(STATUS "  compiler        : ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "  PAL backend     : ${MCP_PAL_BACKEND}")
+message(STATUS "  threading       : ${MCP_SYS_THREADING}")
 message(STATUS "  process spawn   : ${MCP_PAL_HAS_PROCESS}")
 message(STATUS "  server / client : ${MCP_BUILD_SERVER} / ${MCP_BUILD_CLIENT}")
 message(STATUS "  MCP_LOG         : ${MCP_ENABLE_LOGGING}")
@@ -63,13 +71,16 @@ target_include_directories(mcp-core PUBLIC
     $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(mcp-core PUBLIC
-    nlohmann_json::nlohmann_json
-    Threads::Threads
-)
+target_link_libraries(mcp-core PUBLIC nlohmann_json::nlohmann_json)
+if(TARGET Threads::Threads)
+    target_link_libraries(mcp-core PUBLIC Threads::Threads)
+endif()
 target_compile_features(mcp-core PUBLIC cxx_std_17)
 if(MCP_ENABLE_LOGGING)
     target_compile_definitions(mcp-core PUBLIC MCP_LOG_ENABLED)
+endif()
+if(MCP_SYS_THREADING STREQUAL "vxworks-tasks")
+    target_compile_definitions(mcp-core PUBLIC MCP_SYS_VXWORKS_THREADS)
 endif()
 if(MCP_PAL_HAS_PROCESS)
     target_compile_definitions(mcp-core PUBLIC MCP_PAL_HAS_PROCESS)
