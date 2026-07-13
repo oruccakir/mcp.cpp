@@ -91,6 +91,11 @@ public:
         explicit id(void* task) : task_(task) {}
         friend bool operator==(id a, id b) { return a.task_ == b.task_; }
         friend bool operator!=(id a, id b) { return a.task_ != b.task_; }
+        // Ordered so it can key an std::map (used for task-local state where
+        // thread_local is unavailable, e.g. DKM).
+        friend bool operator<(id a, id b) {
+            return std::less<void*>()(a.task_, b.task_);
+        }
 
     private:
         void* task_ = nullptr;  // TASK_ID

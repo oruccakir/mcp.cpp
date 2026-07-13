@@ -12,9 +12,10 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <poll.h>
+#include <selectLib.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 namespace mcp::pal {
@@ -97,11 +98,15 @@ fd_t tcp_connect(const std::string& host, std::uint16_t port, int timeout_ms,
         return kInvalidFd;
     }
     if (rc != 0) {
-        struct pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = POLLOUT;
-        pfd.revents = 0;
-        const int ready = ::poll(&pfd, 1, timeout_ms);
+        // Wait for writability (connect completion) via select() — poll() is
+        // undefined in kernel-module (DKM) builds.
+        fd_set write_set;
+        FD_ZERO(&write_set);
+        FD_SET(fd, &write_set);
+        struct timeval tv;
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        const int ready = ::select(fd + 1, nullptr, &write_set, nullptr, &tv);
         int so_error = 0;
         socklen_t len = sizeof(so_error);
         ::getsockopt(fd, SOL_SOCKET, SO_ERROR,
