@@ -6,9 +6,14 @@
 //
 // VxWorks DKM (kernel module — no argv, main() must not block the shell):
 //   -> ld < echo_server_http.out
-//   -> mcp_echo_http_start 3001     # binds 0.0.0.0:<port>, returns immediately
+//   -> mcp_echo_http_start 3001     # binds 0.0.0.0:<port>, returns the port
 //   -> mcp_echo_http_stop           # stops and frees
-// (needs the ANSI stdio VSB component for the printf status lines).
+// The DKM entries are deliberately stdio-free: a kernel image without the ANSI
+// stdio VSB component leaves __stdioFp undefined, so any printf there would
+// fault. Status comes back through the return value (the shell prints
+// "value = N"): start returns the bound port (>0) or a negative error, stop
+// returns 0. (main() below still uses stderr — it only runs in RTP/host, which
+// have stdio.)
 //
 // TLS is out of scope; bind stays on 127.0.0.1 unless overridden.
 
@@ -90,17 +95,20 @@ int main(int argc, char** argv) {
 // no-argv C entries. HttpSessionServer::start() is non-blocking (its accept
 // task keeps serving), so the start entry returns immediately; the server
 // objects are kept alive in file-scope owners until stop.
+//
+// No stdio here (see the file header): status is the return value, which the
+// VxWorks shell echoes as "value = N".
 
 namespace {
 std::unique_ptr<mcp::Server> g_dkm_server;
 std::unique_ptr<mcp::HttpSessionServer> g_dkm_http;
 }  // namespace
 
+// Returns the bound port (>0) on success, or the already-running port if called
+// twice. Negative on failure: -1 could not bind/start the listener.
 extern "C" int mcp_echo_http_start(int port) {
     if (g_dkm_http) {
-        std::printf("echo_server_http already running on port %u\n",
-                    g_dkm_http->port());
-        return 0;
+        return static_cast<int>(g_dkm_http->port());  // already running
     }
     g_dkm_server = std::make_unique<mcp::Server>("echo-server-http", "1.0.0");
     configure_echo(*g_dkm_server);
@@ -112,22 +120,20 @@ extern "C" int mcp_echo_http_start(int port) {
 
     std::string error;
     if (!g_dkm_http->start(error)) {
-        std::printf("echo_server_http start failed: %s\n", error.c_str());
         g_dkm_http.reset();
         g_dkm_server.reset();
         return -1;
     }
-    std::printf("echo_server_http listening on 0.0.0.0:%u\n",
-                g_dkm_http->port());
-    return 0;
+    return static_cast<int>(g_dkm_http->port());
 }
 
+// Returns 0 if a running server was stopped, 1 if nothing was running.
 extern "C" int mcp_echo_http_stop(void) {
-    if (g_dkm_http) {
-        g_dkm_http->stop();  // joins the accept task before we free the server
-        g_dkm_http.reset();
-        g_dkm_server.reset();
-        std::printf("echo_server_http stopped\n");
+    if (!g_dkm_http) {
+        return 1;
     }
+    g_dkm_http->stop();  // joins the accept task before we free the server
+    g_dkm_http.reset();
+    g_dkm_server.reset();
     return 0;
 }
