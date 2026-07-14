@@ -54,6 +54,22 @@ executable, `.vxe` depending on toolchain), `build-vxworks/examples/echo_server_
    --port 3001` on the target and, from another machine on the (internal)
    network, POST an `initialize` to `http://<target-ip>:3001/mcp`.
 
+### 3.1 System-monitor MCP server (DKM)
+
+`examples/vxworks_monitor/` builds `vxworks_monitor_server` — an MCP server
+exposing task/stack/heap/CPU/module/semaphore introspection as tools (see its
+README for the tool catalog). On VxWorks it links the real kernel backend;
+host builds get simulated data. As a DKM:
+
+```
+-> ld < vxworks_monitor_server.out
+-> mcp_monitor_start 3001     # value = 3001 (bound port), -1 on failure
+-> mcp_monitor_stop           # value = 0
+```
+
+Entries are stdio-free (same `__stdioFp` rationale as `mcp_echo_http_start`),
+and the backend uses only info-get APIs — no `*Show()` console printers.
+
 ## 4. What to bring back (report checklist)
 
 Bring back (photo or typed — everything below is short):
